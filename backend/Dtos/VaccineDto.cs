@@ -1,0 +1,22 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace PetCareX.Api.Dtos;
+
+/// <summary>
+/// DTO for vaccine metadata.
+/// </summary>
+public class VaccineDto
+{
+    /// <summary>Vaccine primary key.</summary>
+    public int VaccineId { get; set; }
+
+    /// <summary>Vaccine type/name.</summary>
+    [Required]
+    public string Type { get; set; } = string.Empty;
+
+    /// <summary>Description (optional).</summary>
+    public string? Description { get; set; }
+
+    /// <summary>Standard dose information (optional).</summary>
+    public string? StandardDose { get; set; }
+}
