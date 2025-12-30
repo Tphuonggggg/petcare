@@ -1,6 +1,17 @@
-﻿create database PetCare
-go
-use PetCare
+﻿USE master;
+GO
+IF DB_ID('PetCare') IS NOT NULL
+BEGIN
+    ALTER DATABASE PetCare SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE PetCare;
+END
+GO
+CREATE DATABASE PetCare;
+GO
+USE PetCare;
+GO
+
+
 CREATE TABLE Vaccine (
     VaccineID INT IDENTITY(1,1) PRIMARY KEY,
     Type NVARCHAR(50) NOT NULL,
@@ -405,6 +416,25 @@ CREATE TABLE VaccineRecord (
     FOREIGN KEY (InvoiceItemID) REFERENCES InvoiceItem(InvoiceItemID)
 );
 GO
+
+--1)
+--InvoiceItem: thiếu ràng buộc “chỉ được chọn 1 trong 2”
+-- Hiện tại ItemType là PRODUCT/SERVICE nhưng ProductID và ServiceID đều để NULL được, hoặc tệ hơn là cả hai cùng có giá trị → dữ liệu bẩn.
+--Thêm check:
+ALTER TABLE InvoiceItem
+ADD CONSTRAINT CK_InvoiceItem_ExactlyOne
+CHECK (
+    (ItemType = 'PRODUCT' AND ProductID IS NOT NULL AND ServiceID IS NULL)
+ OR (ItemType = 'SERVICE' AND ServiceID IS NOT NULL AND ProductID IS NULL)
+)
+GO
+--2)
+--Invoice: Discount có thể làm âm FinalAmount
+--FinalAmount AS (TotalAmount - DiscountAmount) nhưng hiện tại chỉ check DiscountAmount >= 0, không check DiscountAmount <= TotalAmount.
+ALTER TABLE Invoice
+ADD CONSTRAINT CK_Invoice_Discount_LTE_Total
+CHECK (DiscountAmount >= 0 AND DiscountAmount <= TotalAmount);
+GO
 --MembershipTier
 INSERT INTO MembershipTier (Name, MinSpend, MaintainSpend, Benefits)
 VALUES
@@ -466,6 +496,7 @@ INSERT INTO Branch (BranchID, Name, Phone, OpenTime, CloseTime, Address) VALUES
 (18, N'PetCare Đà Nẵng',         '0879351624', '08:00', '21:00', N'Hải Châu, Đà Nẵng'),
 (19, N'PetCare Hà Nội',          '0965283741', '08:00', '21:00', N'Hoàn Kiếm, Hà Nội'),
 (20, N'PetCare Hải Phòng',       '0917364825', '08:00', '21:00', N'Lê Chân, Hải Phòng');
+GO
 --Service
 INSERT INTO Product (Name, Category, Price, StockQty, Description)
 VALUES
@@ -807,7 +838,8 @@ BEGIN
 END
 GO
 --Chạy hàm này trước khi tạo customer
-CREATE FUNCTION dbo.RemoveVietnameseAccent (@str NVARCHAR(MAX))
+GO
+CREATE FUNCTION RemoveVietnameseAccent (@str NVARCHAR(MAX))
 RETURNS NVARCHAR(MAX)
 AS
 BEGIN
@@ -1026,6 +1058,7 @@ CROSS APPLY (
 ) AS P;
 GO
 -- Phat sinh du lieu bang invoice
+-- Phat sinh du lieu bang invoice (FIX discount <= total)
 ;WITH N1 AS (SELECT 1 n FROM (VALUES(1),(1),(1),(1),(1),(1),(1),(1),(1),(1)) a(n)),
       N2 AS (SELECT 1 n FROM N1 a, N1 b),
       N3 AS (SELECT 1 n FROM N2 a, N2 b),
@@ -1035,41 +1068,37 @@ GO
                  ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS RowID
           FROM N4
       )
-INSERT INTO Invoice (BranchID,CustomerID, EmployeeID, InvoiceDate, TotalAmount, DiscountAmount, PaymentMethod)
-SELECT 
-	--Random branch
-	(ABS(CHECKSUM(NEWID())) % 20) + 1 AS BranchID,
-    -- RANDOM CUSTOMER
-    ABS(CHECKSUM(NEWID())) % (SELECT COUNT(*) FROM Customer) + 1,
-
-    -- RANDOM EMPLOYEE
-    ABS(CHECKSUM(NEWID())) % (SELECT COUNT(*) FROM Employee) + 1,
-
-    -- NGÀY TỪ 2023 → HIỆN TẠI
+INSERT INTO Invoice (BranchID, CustomerID, EmployeeID, InvoiceDate, TotalAmount, DiscountAmount, PaymentMethod)
+SELECT
+    (ABS(CHECKSUM(NEWID())) % 20) + 1 AS BranchID,
+    ABS(CHECKSUM(NEWID())) % (SELECT COUNT(*) FROM Customer) + 1 AS CustomerID,
+    ABS(CHECKSUM(NEWID())) % (SELECT COUNT(*) FROM Employee) + 1 AS EmployeeID,
     DATEADD(
         DAY,
         ABS(CHECKSUM(NEWID())) % DATEDIFF(DAY, '2023-01-01', GETDATE()),
         '2023-01-01'
-    ),
+    ) AS InvoiceDate,
 
-    -- TOTAL 50K → 5 TRIỆU
-    CAST((ABS(CHECKSUM(NEWID())) % 4950000) + 50000 AS DECIMAL(14,2)),
+    T.TotalAmount,
 
-    -- DISCOUNT 0–20%
-    CASE WHEN ABS(CHECKSUM(NEWID())) % 10 = 0
-         THEN CAST(((ABS(CHECKSUM(NEWID())) % 20) * 0.01) *
-              ((ABS(CHECKSUM(NEWID())) % 4950000) + 50000) AS DECIMAL(14,2))
-         ELSE 0 END,
+    -- Discount = % * TotalAmount (luôn <= TotalAmount)
+    CASE
+        WHEN ABS(CHECKSUM(NEWID())) % 10 = 0
+            THEN CAST(ROUND(T.TotalAmount * ((ABS(CHECKSUM(NEWID())) % 21) / 100.0), 2) AS DECIMAL(14,2))
+        ELSE CAST(0 AS DECIMAL(14,2))
+    END AS DiscountAmount,
 
-    -- PAYMENT METHOD FIX — KHÔNG BAO GIỜ NULL
     CASE ABS(CHECKSUM(NEWID())) % 3
-        WHEN 0 THEN 'Cash'
-        WHEN 1 THEN 'Card'
-        ELSE 'Banking'
-    END
-
-FROM InvoiceGen;
+        WHEN 0 THEN 'CASH'
+        WHEN 1 THEN 'CARD'
+        ELSE 'BANKING'
+    END AS PaymentMethod
+FROM InvoiceGen
+CROSS APPLY (
+    SELECT CAST((ABS(CHECKSUM(NEWID())) % 4950000) + 50000 AS DECIMAL(14,2)) AS TotalAmount
+) T;
 GO
+
 -- Tạo dữ liệu invoiceitem
 ;WITH Base AS (
     SELECT TOP (500000)
@@ -1314,16 +1343,21 @@ GO
 )
 INSERT INTO VaccineRecord
 (PetID, VaccineID, BranchID, DoctorID, InvoiceItemID, Dose, DateAdministered, NextDueDate)
-SELECT 
+SELECT
     (SELECT TOP 1 PetID FROM Pet ORDER BY NEWID()),
     (SELECT TOP 1 VaccineID FROM Vaccine ORDER BY NEWID()),
     ABS(CHECKSUM(NEWID())) % 20 + 1,
     (SELECT TOP 1 EmployeeID FROM Employee WHERE PositionID = 1 ORDER BY NEWID()),
     (SELECT TOP 1 InvoiceItemID FROM InvoiceItem ORDER BY NEWID()),
-    (ABS(CHECKSUM(NEWID())) % 5) + 1,
-    DATEADD(DAY, ABS(CHECKSUM(NEWID())) % 400, '2023-01-01'),
-    DATEADD(DAY, ABS(CHECKSUM(NEWID())) % 60, GETDATE())
-FROM VR;
+    CAST((ABS(CHECKSUM(NEWID())) % 5) + 1 AS DECIMAL(6,2)),
+
+    da.DateAdministered,
+
+    DATEADD(DAY, (ABS(CHECKSUM(NEWID())) % 60) + 30, da.DateAdministered) AS NextDueDate
+FROM VR
+CROSS APPLY (
+    SELECT DATEADD(DAY, ABS(CHECKSUM(NEWID())) % DATEDIFF(DAY, '2023-01-01', GETDATE()), '2023-01-01') AS DateAdministered
+) da;
 GO
 --ServiceVaccination
 ;WITH SV AS (
@@ -1347,6 +1381,7 @@ CROSS APPLY (
     FROM Vaccine 
     ORDER BY NEWID()
 ) AS V;
+GO
 --VaccinePackageItem
 INSERT INTO VaccinePackageItem (PackageID, VaccineID, RelativeMonth, Dose)
 SELECT 
@@ -1783,23 +1818,61 @@ END
 DELETE FROM Invoice WHERE InvoiceID=@InvoiceID
 GO
 
-----------Add InvoiceItem-------------------
+------------Add InvoiceItem-------------------
 CREATE PROC sp_InvoiceItem_Add
-@InvoiceID INT,
-@ItemType NVARCHAR(20),
-@ProductID INT,
-@ServiceID INT,
-@Quantity INT,
-@UnitPrice DECIMAL(14,2)
+    @InvoiceID  INT,
+    @ItemType   NVARCHAR(20),
+    @ProductID  INT = NULL,
+    @ServiceID  INT = NULL,
+    @Quantity   INT,
+    @UnitPrice  DECIMAL(14,2)
 AS
-IF NOT EXISTS (SELECT 1 FROM Invoice WHERE InvoiceID=@InvoiceID)
 BEGIN
-    RAISERROR(N'Hóa đơn không tồn tại',16,1)
-    RETURN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM Invoice WHERE InvoiceID = @InvoiceID)
+    BEGIN
+        RAISERROR(N'Hoa don khong ton tai', 16, 1);
+        RETURN;
+    END
+
+    IF @ItemType NOT IN ('PRODUCT','SERVICE')
+    BEGIN
+        RAISERROR(N'ItemType chi nhan PRODUCT hoac SERVICE', 16, 1);
+        RETURN;
+    END
+
+    IF @Quantity <= 0 OR @UnitPrice <= 0
+    BEGIN
+        RAISERROR(N'Quantity/UnitPrice phai > 0', 16, 1);
+        RETURN;
+    END
+
+    -- EP DUNG "ExactlyOne"
+    IF @ItemType = 'PRODUCT'
+    BEGIN
+        IF @ProductID IS NULL OR @ServiceID IS NOT NULL
+        BEGIN
+            RAISERROR(N'PRODUCT: can ProductID va ServiceID phai NULL', 16, 1);
+            RETURN;
+        END
+        -- @ServiceID da NULL dung luat
+    END
+    ELSE -- SERVICE
+    BEGIN
+        IF @ServiceID IS NULL OR @ProductID IS NOT NULL
+        BEGIN
+            RAISERROR(N'SERVICE: can ServiceID va ProductID phai NULL', 16, 1);
+            RETURN;
+        END
+        -- @ProductID da NULL dung luat
+    END
+
+    INSERT INTO InvoiceItem(InvoiceID, ItemType, ProductID, ServiceID, Quantity, UnitPrice)
+    VALUES(@InvoiceID, @ItemType, @ProductID, @ServiceID, @Quantity, @UnitPrice);
 END
-INSERT INTO InvoiceItem
-VALUES(@InvoiceID,@ItemType,@ProductID,@ServiceID,@Quantity,@UnitPrice)
 GO
+
 ----------Update InvoiceItem----------------
 CREATE PROC sp_InvoiceItem_Update
 @InvoiceItemID INT,
@@ -1945,19 +2018,52 @@ UPDATE VaccineBatch
 SET Quantity=@Quantity
 WHERE BatchID=@BatchID
 GO
-
 ----------Delete VaccineBatch---------------
 CREATE PROC sp_VaccineBatch_Delete
-@BatchID INT
+    @BatchID INT
 AS
-IF EXISTS (SELECT 1 FROM VaccineRecord WHERE InvoiceItemID IS NOT NULL)
 BEGIN
-    RAISERROR(N'Lô vắc-xin đã được sử dụng',16,1)
-    RETURN
-END
-DELETE FROM VaccineBatch WHERE BatchID=@BatchID
-GO
+    SET NOCOUNT ON;
 
+    -- 1. Batch tồn tại?
+    IF NOT EXISTS (
+        SELECT 1 FROM VaccineBatch WHERE BatchID = @BatchID
+    )
+    BEGIN
+        RAISERROR(N'Lô vắc-xin không tồn tại',16,1);
+        RETURN;
+    END
+
+    -- 2. Đã từng được sử dụng?
+    IF EXISTS (
+        SELECT 1
+        FROM VaccineRecord vr
+        JOIN VaccineBatch vb
+            ON vr.VaccineID = vb.VaccineID
+           AND vr.BranchID  = vb.BranchID
+        WHERE vb.BatchID = @BatchID
+    )
+    BEGIN
+        RAISERROR(N'Không thể xóa lô vắc-xin đã được sử dụng',16,1);
+        RETURN;
+    END
+
+    -- 3. Còn tồn kho?
+    IF EXISTS (
+        SELECT 1
+        FROM VaccineBatch
+        WHERE BatchID = @BatchID
+          AND Quantity > 0
+    )
+    BEGIN
+        RAISERROR(N'Không thể xóa lô vắc-xin còn tồn kho',16,1);
+        RETURN;
+    END
+
+    -- 4. OK → xóa
+    DELETE FROM VaccineBatch WHERE BatchID = @BatchID;
+END
+GO
 ----------Update CheckHealth----------------
 CREATE PROC sp_CheckHealth_Update
 @CheckID INT,
@@ -2018,7 +2124,6 @@ BEGIN
         RAISERROR(N'Khách hàng đã tồn tại',16,1)
         RETURN
     END
-
     INSERT INTO Customer
     (MembershipTierID, FullName, Phone, Email, CCCD, Gender, BirthDate)
     VALUES
@@ -2082,16 +2187,25 @@ GO
 -- Kích hoạt khi: INSERT InvoiceItem
 -- Điều kiện: ItemType = 'PRODUCT'
 -- Bảng tác động: Product
-CREATE TRIGGER trg_InvoiceItem_UpdateProductStock
+CREATE OR ALTER TRIGGER trg_InvoiceItem_UpdateProductStock
 ON InvoiceItem
 AFTER INSERT
 AS
-UPDATE Product
-SET StockQty = StockQty - i.Quantity
-FROM Product p
-JOIN inserted i ON p.ProductID = i.ProductID
-WHERE i.ItemType = 'PRODUCT'
+BEGIN
+    UPDATE p
+    SET p.StockQty = p.StockQty - i.Quantity
+    FROM Product p
+    JOIN inserted i ON p.ProductID = i.ProductID
+    WHERE i.ItemType = 'PRODUCT';
+
+    IF EXISTS (SELECT 1 FROM Product WHERE StockQty < 0)
+    BEGIN
+        RAISERROR(N'Tồn kho sản phẩm không đủ',16,1);
+        ROLLBACK;
+    END
+END
 GO
+
 ----------Trigger: trg_Product_PreventNegativeStock------------
 -- Chức năng: Ngăn tồn kho sản phẩm bị âm
 -- Kích hoạt khi: UPDATE Product
@@ -2105,75 +2219,101 @@ BEGIN
     ROLLBACK
 END
 GO
-/*============================================================
-  Tên: trg_VaccineRecord_UpdateStock_FEFO
-  Chức năng: Trừ tồn kho vaccine theo FEFO
-  Mô tả:
-    - Chọn lô có ExpiryDate gần nhất
-    - Trừ theo liều tiêm (Dose)
-  Bảng tác động: VaccineBatch
-============================================================*/
-CREATE TRIGGER trg_VaccineRecord_UpdateStock
-ON VaccineRecord
-AFTER INSERT
-AS
-BEGIN
-    UPDATE vb
-    SET vb.Quantity = vb.Quantity - i.Dose
-    FROM VaccineBatch vb
-    JOIN inserted i
-      ON vb.BatchID = (
-            SELECT TOP 1 BatchID
-            FROM VaccineBatch
-            WHERE VaccineID = i.VaccineID
-              AND BranchID  = i.BranchID
-              AND Quantity >= i.Dose
-            ORDER BY ExpiryDate
-        )
-END
-GO
-----------Trigger: trg_VaccineRecord_PreventExpired------------
--- Chức năng: Không cho tiêm vắc-xin đã hết hạn
--- Kích hoạt khi: INSERT VaccineRecord
-CREATE TRIGGER trg_VaccineRecord_PreventExpired
+
+CREATE OR ALTER TRIGGER trg_VaccineRecord_Insert_FEFO
 ON VaccineRecord
 INSTEAD OF INSERT
 AS
-IF EXISTS (
-    SELECT 1
-    FROM inserted i
-    JOIN VaccineBatch vb
-      ON i.VaccineID = vb.VaccineID
-     AND i.BranchID = vb.BranchID
-    WHERE vb.ExpiryDate < i.DateAdministered
-)
 BEGIN
-    ROLLBACK
-END
-ELSE
-INSERT INTO VaccineRecord
-(
-    PetID,
-    VaccineID,
-    BranchID,
-    DoctorID,
-    InvoiceItemID,
-    Dose,
-    DateAdministered,
-    NextDueDate
-)
-SELECT
-    PetID,
-    VaccineID,
-    BranchID,
-    DoctorID,
-    InvoiceItemID,
-    Dose,
-    DateAdministered,
-    NextDueDate
-FROM inserted
+    SET NOCOUNT ON;
 
+    /* 1. Kiểm tra tồn kho đủ */
+    IF EXISTS (
+        SELECT 1
+        FROM (
+            SELECT VaccineID, BranchID, SUM(Dose) AS Need
+            FROM inserted
+            GROUP BY VaccineID, BranchID
+        ) d
+        JOIN (
+            SELECT VaccineID, BranchID, SUM(Quantity) AS Stock
+            FROM VaccineBatch
+            GROUP BY VaccineID, BranchID
+        ) s
+          ON d.VaccineID = s.VaccineID
+         AND d.BranchID  = s.BranchID
+        WHERE d.Need > s.Stock
+    )
+    BEGIN
+        RAISERROR(N'Không đủ tồn kho vắc-xin',16,1);
+        RETURN;
+    END
+
+    /* 2. Kiểm tra batch FEFO có bị hết hạn */
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        CROSS APPLY (
+            SELECT TOP 1 vb.ExpiryDate
+            FROM VaccineBatch vb
+            WHERE vb.VaccineID = i.VaccineID
+              AND vb.BranchID  = i.BranchID
+              AND vb.Quantity > 0
+            ORDER BY vb.ExpiryDate
+        ) b
+        WHERE b.ExpiryDate < i.DateAdministered
+    )
+    BEGIN
+        RAISERROR(N'Không thể tiêm vắc-xin đã hết hạn',16,1);
+        RETURN;
+    END
+
+    /* 3. Insert lịch sử tiêm */
+    INSERT INTO VaccineRecord
+    (PetID, VaccineID, BranchID, DoctorID, InvoiceItemID,
+     Dose, DateAdministered, NextDueDate)
+    SELECT
+        PetID, VaccineID, BranchID, DoctorID, InvoiceItemID,
+        Dose, DateAdministered, NextDueDate
+    FROM inserted;
+
+    /* 4. Trừ kho theo FEFO */
+    ;WITH UsedDose AS (
+        SELECT VaccineID, BranchID, SUM(Dose) AS TotalDose
+        FROM inserted
+        GROUP BY VaccineID, BranchID
+    ),
+    FEFO AS (
+        SELECT
+            vb.BatchID,
+            vb.VaccineID,
+            vb.BranchID,
+            vb.Quantity,
+            SUM(vb.Quantity) OVER (
+                PARTITION BY vb.VaccineID, vb.BranchID
+                ORDER BY vb.ExpiryDate
+            ) AS CumQty
+        FROM VaccineBatch vb
+        JOIN UsedDose u
+          ON vb.VaccineID = u.VaccineID
+         AND vb.BranchID  = u.BranchID
+    )
+    UPDATE vb
+    SET vb.Quantity =
+        CASE
+            WHEN f.CumQty <= u.TotalDose THEN 0
+            WHEN f.CumQty - vb.Quantity >= u.TotalDose THEN vb.Quantity
+            ELSE f.CumQty - u.TotalDose
+        END
+    FROM VaccineBatch vb
+    JOIN FEFO f ON vb.BatchID = f.BatchID
+    JOIN UsedDose u
+      ON f.VaccineID = u.VaccineID
+     AND f.BranchID  = u.BranchID;
+END
 GO
+
+
 ----------Trigger: trg_Invoice_UpdateLoyalty-------------------
 -- Chức năng: Cộng điểm loyalty khi thanh toán hóa đơn
 -- Quy tắc: 1 điểm = 50.000 VNĐ
@@ -2240,21 +2380,24 @@ GO
 -- Chức năng: Tự động cập nhật hạng hội viên theo chi tiêu
 -- Kích hoạt khi: UPDATE Customer
 -- Bảng tác động: Customer
-CREATE TRIGGER trg_Customer_UpdateMembershipTier
+CREATE OR ALTER TRIGGER trg_Customer_UpdateMembershipTier
 ON Customer
 AFTER UPDATE
 AS
-UPDATE Customer
-SET MembershipTierID =
-(
-    SELECT TOP 1 MembershipTierID
-    FROM MembershipTier
-    WHERE inserted.TotalYearlySpend >= MinSpend
-    ORDER BY MinSpend DESC
-)
-FROM Customer c
-JOIN inserted ON c.CustomerID = inserted.CustomerID
+BEGIN
+    UPDATE c
+    SET c.MembershipTierID =
+    (
+        SELECT TOP 1 MembershipTierID
+        FROM MembershipTier
+        WHERE i.TotalYearlySpend >= MinSpend
+        ORDER BY MinSpend DESC
+    )
+    FROM Customer c
+    JOIN inserted i ON c.CustomerID = i.CustomerID;
+END
 GO
+
 /*============================================================
   Tên: trg_Booking_UpdateHistory
   Chức năng: Ghi lịch sử thay đổi booking
@@ -2297,14 +2440,25 @@ GO
 -- Chức năng: Ghi nhận chi nhánh đầu tiên của nhân viên
 -- Kích hoạt khi: INSERT Employee
 -- Bảng tác động: EmployeeHistory
-CREATE TRIGGER trg_Employee_InsertHistory
+CREATE OR ALTER TRIGGER trg_Employee_InsertHistory
 ON Employee
 AFTER INSERT
 AS
-INSERT INTO EmployeeHistory(EmployeeID, BranchID, StartDate)
-SELECT EmployeeID, BranchID, HireDate
-FROM inserted
+BEGIN
+    INSERT INTO EmployeeHistory(EmployeeID, BranchID, StartDate)
+    SELECT i.EmployeeID, i.BranchID, i.HireDate
+    FROM inserted i
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM EmployeeHistory eh
+        WHERE eh.EmployeeID = i.EmployeeID
+          AND eh.BranchID   = i.BranchID
+          AND eh.StartDate  = i.HireDate
+    );
+END
 GO
+
+
 /*============================================================
   Tên: sp_Revenue_ByBranch_Month
   Chức năng: Thống kê doanh thu chi nhánh theo tháng
@@ -2617,7 +2771,7 @@ BEGIN
     SET NOCOUNT ON;
 
     -- Validate BookingType
-    IF @BookingType NOT IN ('KHAM', 'TIEM')
+    IF @BookingType NOT IN ('CheckHealth', 'Vaccination')
     BEGIN
         RAISERROR(N'BookingType chỉ nhận KHAM hoặc TIEM', 16, 1);
         RETURN;
@@ -2653,7 +2807,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    IF @BookingType NOT IN ('KHAM', 'TIEM')
+    IF @BookingType NOT IN ('CheckHealth', 'Vaccination')
     BEGIN
         RAISERROR(N'BookingType không hợp lệ', 16, 1);
         RETURN;
@@ -2865,3 +3019,147 @@ BEGIN
     ORDER BY DoctorName;
 END;
 GO
+/*============================================================
+  Tên: usp_Pet_GetPurchaseHistory
+  Chức năng: Xem chi tiết các sản phẩm/dịch vụ đã mua cho 1 thú cưng cụ thể
+  Đối tượng dùng:
+    - Khách hàng 
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Pet_GetPurchaseHistory
+    @PetID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        I.InvoiceDate,
+        II.ItemType,
+        ISNULL(P.Name, S.Name) AS ItemName,
+        II.Quantity,
+        II.UnitPrice,
+        II.TotalPrice
+    FROM Invoice I
+    JOIN InvoiceItem II ON I.InvoiceID = II.InvoiceID
+    LEFT JOIN Product P ON II.ProductID = P.ProductID
+    LEFT JOIN Service S ON II.ServiceID = S.ServiceID
+    WHERE I.PetID = @PetID
+    ORDER BY I.InvoiceDate DESC;
+END;
+GO
+/*============================================================
+  Tên: usp_CheckHealth_Create
+  Chức năng: Bác sĩ tạo bệnh án mới và kê toa
+  Đối tượng dùng:
+    - Bác sĩ
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_CheckHealth_Create
+    @PetID INT,
+    @DoctorID INT,
+    @Symptoms NVARCHAR(255),
+    @Diagnosis NVARCHAR(255) = NULL,
+    @Prescription NVARCHAR(255) = NULL,
+    @FollowUpDate DATETIME = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Kiểm tra nhân viên có phải bác sĩ không (PositionID = 1)
+    IF NOT EXISTS (SELECT 1 FROM Employee WHERE EmployeeID = @DoctorID AND PositionID = 1)
+    BEGIN
+        RAISERROR(N'Nhân viên thực hiện phải là Bác sĩ thú y', 16, 1);
+        RETURN;
+    END
+
+    INSERT INTO CheckHealth (PetID, DoctorID, CheckDate, Symptoms, Diagnosis, Prescription, FollowUpDate)
+    VALUES (@PetID, @DoctorID, GETDATE(), @Symptoms, @Diagnosis, @Prescription, @FollowUpDate);
+    
+    SELECT SCOPE_IDENTITY() AS NewCheckID;
+END;
+GO
+/*============================================================
+  Tên: usp_FindAvailableDoctors
+  Chức năng: Thống kê doanh thu bán sản phẩm theo loại
+  Đối tượng dùng:
+    - Quản lý
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_GetProductRevenueByCategory
+    @FromDate DATE,
+    @ToDate DATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        P.Category,
+        COUNT(II.InvoiceItemID) AS TotalSoldQuantity,
+        SUM(II.TotalPrice) AS CategoryRevenue
+    FROM InvoiceItem II
+    JOIN Product P ON II.ProductID = P.ProductID
+    JOIN Invoice I ON II.InvoiceID = I.InvoiceID
+    WHERE II.ItemType = 'PRODUCT'
+      AND I.InvoiceDate BETWEEN @FromDate AND @ToDate
+    GROUP BY P.Category
+    ORDER BY CategoryRevenue DESC;
+END;
+GO
+/*============================================================
+  Tên: usp_FindAvailableDoctors
+  Chức năng: Thống kê doanh thu sản phẩm chạy nhất
+  Đối tượng dùng:
+    - Quản lý
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_GetTopSellingProducts
+    @Top INT = 10
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT TOP (@Top)
+        P.Name,
+        P.Category,
+        SUM(II.Quantity) AS TotalQuantity
+    FROM InvoiceItem II
+    JOIN Product P ON II.ProductID = P.ProductID
+    WHERE II.ItemType = 'PRODUCT'
+    GROUP BY P.ProductID, P.Name, P.Category
+    ORDER BY TotalQuantity DESC;
+END;
+GO
+/*============================================================
+  Tên: usp_FindAvailableDoctors
+  Chức năng: Xem lịch đã đặt của 1 bác sĩ trong ngày để khách tránh đặt trùng
+  Đối tượng dùng:
+	- Khách Hàng
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_GetDoctorScheduleByDate
+    @DoctorID INT,
+    @Date DATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Lưu ý: Vì bảng Booking không có DoctorID trực tiếp, 
+    -- ta có thể xem qua các ca khám đã thực hiện (CheckHealth) 
+    -- hoặc dựa trên logic phân bổ bác sĩ cho Booking.
+    
+    SELECT 
+        CheckDate AS AppointmentTime,
+        P.Name AS PetName,
+        'Examination' AS Activity
+    FROM CheckHealth CH
+    JOIN Pet P ON CH.PetID = P.PetID
+    WHERE CH.DoctorID = @DoctorID 
+      AND CAST(CH.CheckDate AS DATE) = @Date
+      
+    UNION ALL
+    
+    SELECT 
+        DateAdministered,
+        P.Name,
+        'Vaccination'
+    FROM VaccineRecord VR
+    JOIN Pet P ON VR.PetID = P.PetID
+    WHERE VR.DoctorID = @DoctorID 
+      AND CAST(VR.DateAdministered AS DATE) = @Date
+      
+    ORDER BY AppointmentTime;
+END;
+GO
+

@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using PetCareX.Api.Data;
 using PetCareX.Api.Models;
 using PetCareX.Api.Dtos;
 using AutoMapper;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -209,5 +211,67 @@ public class CustomersController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Finds a customer and their pets by phone number.
+    /// </summary>
+    /// <param name="phone">Customer phone number</param>
+    /// <returns>Customer and pet information</returns>
+    [HttpGet("find-by-phone")]
+    public async Task<ActionResult<List<CustomerPetInfoDto>>> FindPetByCustomerPhone([FromQuery] string phone)
+    {
+        var results = new List<CustomerPetInfoDto>();
+        
+        using (var command = _context.Database.GetDbConnection().CreateCommand())
+        {
+            command.CommandText = "usp_FindPetByCustomerPhone";
+            command.CommandType = CommandType.StoredProcedure;
+            
+            command.Parameters.Add(new SqlParameter("@Phone", phone ?? string.Empty));
+            
+            await _context.Database.OpenConnectionAsync();
+            
+            using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    results.Add(new CustomerPetInfoDto
+                    {
+                        CustomerId = reader.GetInt32(0),
+                        FullName = reader.GetString(1),
+                        PetId = reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                        PetName = reader.IsDBNull(3) ? null : reader.GetString(3),
+                        Species = reader.IsDBNull(4) ? null : reader.GetString(4),
+                        Breed = reader.IsDBNull(5) ? null : reader.GetString(5)
+                    });
+                }
+            }
+        }
+        
+        return results;
+    }
+
     private bool CustomerExists(int id) => _context.Customers.Any(e => e.CustomerId == id);
 }
+
+#region DTOs
+
+/// <summary>
+/// Customer and pet information DTO.
+/// </summary>
+public class CustomerPetInfoDto
+{
+    /// <summary>Customer ID</summary>
+    public int CustomerId { get; set; }
+    /// <summary>Customer full name</summary>
+    public string FullName { get; set; } = string.Empty;
+    /// <summary>Pet ID</summary>
+    public int? PetId { get; set; }
+    /// <summary>Pet name</summary>
+    public string? PetName { get; set; }
+    /// <summary>Pet species</summary>
+    public string? Species { get; set; }
+    /// <summary>Pet breed</summary>
+    public string? Breed { get; set; }
+}
+
+#endregion

@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using PetCareX.Api.Data;
 using PetCareX.Api.Models;
 using PetCareX.Api.Dtos;
 using AutoMapper;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -92,4 +94,115 @@ public class ProductsController : ControllerBase
         await _context.SaveChangesAsync();
         return NoContent();
     }
+
+    /// <summary>
+    /// Searches for products by keyword.
+    /// </summary>
+    /// <param name="keyword">Search keyword</param>
+    /// <returns>List of products matching the keyword</returns>
+    [HttpGet("search")]
+    public async Task<ActionResult<List<ProductSearchDto>>> SearchProduct([FromQuery] string keyword)
+    {
+        var results = new List<ProductSearchDto>();
+        
+        using (var command = _context.Database.GetDbConnection().CreateCommand())
+        {
+            command.CommandText = "usp_SearchProduct";
+            command.CommandType = CommandType.StoredProcedure;
+            
+            command.Parameters.Add(new SqlParameter("@Keyword", keyword ?? string.Empty));
+            
+            await _context.Database.OpenConnectionAsync();
+            
+            using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    results.Add(new ProductSearchDto
+                    {
+                        ProductId = reader.GetInt32(0),
+                        Name = reader.GetString(1),
+                        Category = reader.GetString(2),
+                        Price = reader.GetDecimal(3),
+                        StockQty = reader.GetInt32(4)
+                    });
+                }
+            }
+        }
+        
+        return results;
+    }
+
+    /// <summary>
+    /// Searches for medicine products by keyword.
+    /// </summary>
+    /// <param name="keyword">Search keyword</param>
+    /// <returns>List of medicine products matching the keyword</returns>
+    [HttpGet("search-medicine")]
+    public async Task<ActionResult<List<MedicineSearchDto>>> SearchMedicine([FromQuery] string keyword)
+    {
+        var results = new List<MedicineSearchDto>();
+        
+        using (var command = _context.Database.GetDbConnection().CreateCommand())
+        {
+            command.CommandText = "usp_SearchMedicine";
+            command.CommandType = CommandType.StoredProcedure;
+            
+            command.Parameters.Add(new SqlParameter("@Keyword", keyword ?? string.Empty));
+            
+            await _context.Database.OpenConnectionAsync();
+            
+            using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    results.Add(new MedicineSearchDto
+                    {
+                        ProductId = reader.GetInt32(0),
+                        Name = reader.GetString(1),
+                        Price = reader.GetDecimal(2),
+                        StockQty = reader.GetInt32(3)
+                    });
+                }
+            }
+        }
+        
+        return results;
+    }
 }
+
+#region DTOs
+
+/// <summary>
+/// Product search result DTO.
+/// </summary>
+public class ProductSearchDto
+{
+    /// <summary>Product ID</summary>
+    public int ProductId { get; set; }
+    /// <summary>Product name</summary>
+    public string Name { get; set; } = string.Empty;
+    /// <summary>Product category</summary>
+    public string Category { get; set; } = string.Empty;
+    /// <summary>Product price</summary>
+    public decimal Price { get; set; }
+    /// <summary>Stock quantity</summary>
+    public int StockQty { get; set; }
+}
+
+/// <summary>
+/// Medicine search result DTO.
+/// </summary>
+public class MedicineSearchDto
+{
+    /// <summary>Product ID</summary>
+    public int ProductId { get; set; }
+    /// <summary>Medicine name</summary>
+    public string Name { get; set; } = string.Empty;
+    /// <summary>Medicine price</summary>
+    public decimal Price { get; set; }
+    /// <summary>Stock quantity</summary>
+    public int StockQty { get; set; }
+}
+
+#endregion

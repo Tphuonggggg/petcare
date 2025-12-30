@@ -13,6 +13,9 @@ namespace PetCareX.Api.Services
     {
         private Timer? _timer;
 
+        /// <summary>
+        /// Starts the diagnostic service and begins heartbeat logging.
+        /// </summary>
         public Task StartAsync(CancellationToken cancellationToken)
         {
             Console.WriteLine($"DiagnosticHostedService: StartAsync (pid={Environment.ProcessId})");
@@ -21,6 +24,9 @@ namespace PetCareX.Api.Services
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Stops the diagnostic service and halts heartbeat logging.
+        /// </summary>
         public Task StopAsync(CancellationToken cancellationToken)
         {
             Console.WriteLine("DiagnosticHostedService: StopAsync");
@@ -28,6 +34,9 @@ namespace PetCareX.Api.Services
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Disposes the timer resources.
+        /// </summary>
         public void Dispose()
         {
             _timer?.Dispose();

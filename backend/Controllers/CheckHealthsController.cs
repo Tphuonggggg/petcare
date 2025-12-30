@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using PetCareX.Api.Data;
 using PetCareX.Api.Models;
 using PetCareX.Api.Dtos;
 using AutoMapper;
+using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -88,4 +91,82 @@ public class CheckHealthsController : ControllerBase
         await _context.SaveChangesAsync();
         return NoContent();
     }
+
+    /// <summary>
+    /// Creates a new health check record using stored procedure (for doctors).
+    /// </summary>
+    /// <param name="request">Health check creation request</param>
+    /// <returns>New check ID</returns>
+    [HttpPost("create-by-doctor")]
+    public async Task<ActionResult<CheckHealthCreateResultDto>> CreateCheckHealthByDoctor([FromBody] CreateCheckHealthDto request)
+    {
+        try
+        {
+            var result = new CheckHealthCreateResultDto();
+            
+            using (var command = _context.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = "usp_CheckHealth_Create";
+                command.CommandType = CommandType.StoredProcedure;
+                
+                command.Parameters.Add(new SqlParameter("@PetID", request.PetId));
+                command.Parameters.Add(new SqlParameter("@DoctorID", request.DoctorId));
+                command.Parameters.Add(new SqlParameter("@Symptoms", request.Symptoms));
+                command.Parameters.Add(new SqlParameter("@Diagnosis", 
+                    (object?)request.Diagnosis ?? DBNull.Value));
+                command.Parameters.Add(new SqlParameter("@Prescription", 
+                    (object?)request.Prescription ?? DBNull.Value));
+                command.Parameters.Add(new SqlParameter("@FollowUpDate", 
+                    request.FollowUpDate.HasValue ? (object)request.FollowUpDate.Value : DBNull.Value));
+                
+                await _context.Database.OpenConnectionAsync();
+                
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        result.NewCheckId = reader.GetInt32(0);
+                    }
+                }
+            }
+            
+            return CreatedAtAction(nameof(Get), new { id = result.NewCheckId }, result);
+        }
+        catch (SqlException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }
+
+#region DTOs
+
+/// <summary>
+/// Request DTO for creating health check by doctor.
+/// </summary>
+public class CreateCheckHealthDto
+{
+    /// <summary>Pet ID</summary>
+    public int PetId { get; set; }
+    /// <summary>Doctor ID</summary>
+    public int DoctorId { get; set; }
+    /// <summary>Symptoms observed</summary>
+    public string Symptoms { get; set; } = string.Empty;
+    /// <summary>Diagnosis</summary>
+    public string? Diagnosis { get; set; }
+    /// <summary>Prescription</summary>
+    public string? Prescription { get; set; }
+    /// <summary>Follow-up date</summary>
+    public DateTime? FollowUpDate { get; set; }
+}
+
+/// <summary>
+/// Result DTO for health check creation.
+/// </summary>
+public class CheckHealthCreateResultDto
+{
+    /// <summary>ID of the newly created health check</summary>
+    public int NewCheckId { get; set; }
+}
+
+#endregion
