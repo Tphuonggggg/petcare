@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -8,8 +9,9 @@ namespace PetCareX.Api.Dtos;
 /// </summary>
 public class BookingHistoryDto
 {
-    /// <summary>History entry primary key.</summary>
-    public int HistoryId { get; set; }
+    /// <summary>History entry primary key. Auto-generated when creating new entries.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? HistoryId { get; set; }
 
     /// <summary>Related booking primary key.</summary>
     [Required]

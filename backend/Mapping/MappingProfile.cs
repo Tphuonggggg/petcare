@@ -16,14 +16,17 @@ public class MappingProfile : Profile
     {
         CreateMap<Customer, CustomerDto>()
             .ForMember(dest => dest.MembershipTier, opt => opt.MapFrom(src => src.MembershipTier != null ? src.MembershipTier.Name : null))
-            .ForMember(dest => dest.Cccd, opt => opt.MapFrom(src => src.Cccd));
-        CreateMap<Pet, PetDto>();
+            .ForMember(dest => dest.Cccd, opt => opt.MapFrom(src => src.Cccd))
+            .ForMember(dest => dest.Pets, opt => opt.MapFrom(src => src.Pets));
+        CreateMap<Pet, PetDto>()
+            .ForMember(dest => dest.BirthDate, opt => opt.MapFrom(src => src.BirthDate.HasValue ? src.BirthDate.Value.ToDateTime(TimeOnly.MinValue) : (DateTime?)null));
         CreateMap<Booking, BookingDto>();
 
             // reverse maps if needed
             CreateMap<CustomerDto, Customer>()
                 .ForAllMembers(opts => opts.Condition((src, dest, srcMember, destMember, ctx) => srcMember != null));
-            CreateMap<PetDto, Pet>();
+            CreateMap<PetDto, Pet>()
+                .ForMember(dest => dest.BirthDate, opt => opt.MapFrom(src => src.BirthDate.HasValue ? DateOnly.FromDateTime(src.BirthDate.Value) : (DateOnly?)null));
             CreateMap<BookingDto, Booking>();
 
             // Additional mappings for generated DTOs

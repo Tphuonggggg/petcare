@@ -29,13 +29,18 @@ public class ServicesController : ControllerBase
     }
 
     /// <summary>
-    /// Returns all services.
+    /// Returns paginated services.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<ServiceDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<ServiceDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var list = await _context.Services.ToListAsync();
-        return _mapper.Map<List<ServiceDto>>(list);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.Services.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<ServiceDto>>(items);
+        return new PaginatedResult<ServiceDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>

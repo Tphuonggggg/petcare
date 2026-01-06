@@ -30,13 +30,18 @@ public class PositionsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns all positions.
+    /// Returns paginated positions.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<PositionDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<PositionDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var list = await _context.Positions.ToListAsync();
-        return _mapper.Map<List<PositionDto>>(list);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.Positions.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<PositionDto>>(items);
+        return new PaginatedResult<PositionDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>

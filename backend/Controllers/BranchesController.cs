@@ -25,13 +25,18 @@ public class BranchesController : ControllerBase
     public BranchesController(ApplicationDbContext context, IMapper mapper) { _context = context; _mapper = mapper; }
 
     /// <summary>
-    /// Returns all branches.
+    /// Returns paginated branches.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<BranchDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<BranchDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var list = await _context.Branches.ToListAsync();
-        return _mapper.Map<List<BranchDto>>(list);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.Branches.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<BranchDto>>(items);
+        return new PaginatedResult<BranchDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>

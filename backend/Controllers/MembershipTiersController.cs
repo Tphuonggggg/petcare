@@ -30,13 +30,18 @@ public class MembershipTiersController : ControllerBase
     }
 
     /// <summary>
-    /// Returns all membership tiers.
+    /// Returns paginated membership tiers.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<MembershipTierDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<MembershipTierDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var list = await _context.MembershipTiers.ToListAsync();
-        return _mapper.Map<List<MembershipTierDto>>(list);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.MembershipTiers.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<MembershipTierDto>>(items);
+        return new PaginatedResult<MembershipTierDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>

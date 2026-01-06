@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -9,7 +10,8 @@ namespace PetCareX.Api.Dtos;
 public class InvoiceDto
 {
     /// <summary>Invoice primary key.</summary>
-    public int InvoiceId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? InvoiceId { get; set; }
 
     /// <summary>Branch where invoice was created (optional).</summary>
     public int? BranchId { get; set; }

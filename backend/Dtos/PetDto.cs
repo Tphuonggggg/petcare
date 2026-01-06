@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -8,7 +9,8 @@ namespace PetCareX.Api.Dtos;
 public class PetDto
 {
     /// <summary>Pet primary key.</summary>
-    public int PetId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? PetId { get; set; }
 
     /// <summary>Owning customer primary key.</summary>
     [Required]
@@ -26,4 +28,13 @@ public class PetDto
 
     /// <summary>Breed (optional).</summary>
     public string? Breed { get; set; }
+
+    /// <summary>Birth date (optional).</summary>
+    public DateTime? BirthDate { get; set; }
+
+    /// <summary>Gender (optional).</summary>
+    public string? Gender { get; set; }
+
+    /// <summary>Status (optional).</summary>
+    public string? Status { get; set; }
 }

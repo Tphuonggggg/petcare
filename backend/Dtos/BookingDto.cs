@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -8,7 +9,8 @@ namespace PetCareX.Api.Dtos;
 public class BookingDto
 {
     /// <summary>Primary key.</summary>
-    public int BookingId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? BookingId { get; set; }
 
     /// <summary>Customer who made the booking.</summary>
     [Required]

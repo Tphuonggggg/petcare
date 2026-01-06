@@ -52,7 +52,7 @@ public class CustomersController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<CustomerDto>> Get(int id)
     {
-        var item = await _context.Customers.FindAsync(id);
+        var item = await _context.Customers.Include(c => c.Pets).FirstOrDefaultAsync(c => c.CustomerId == id);
         if (item == null) return NotFound();
         return _mapper.Map<CustomerDto>(item);
     }
@@ -82,10 +82,34 @@ public class CustomersController : ControllerBase
             }
         }
 
-        _context.Customers.Add(entity);
         try
         {
-            await _context.SaveChangesAsync();
+            // Ensure required fields have default values
+            entity.Cccd ??= (100000000000 + new Random().Next(1000000)).ToString(); // Random 12-digit CCCD
+            entity.Gender ??= "O"; // Other
+            if (entity.BirthDate == default)
+                entity.BirthDate = DateOnly.FromDateTime(DateTime.Today.AddYears(-30)); // Default to 30 years ago
+
+            // Use raw SQL to avoid OUTPUT clause issue with triggers
+            var newCustomerId = await _context.Database.SqlQueryRaw<int>(
+                @"
+                INSERT INTO Customer (MembershipTierId, FullName, Phone, Email, Cccd, Gender, BirthDate, MemberSince, TotalYearlySpend, PointsBalance)
+                VALUES ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9});
+                SELECT CAST(SCOPE_IDENTITY() as int);
+                ",
+                entity.MembershipTierId,
+                entity.FullName,
+                entity.Phone,
+                entity.Email ?? (object)DBNull.Value,
+                entity.Cccd,
+                entity.Gender,
+                entity.BirthDate,
+                entity.MemberSince,
+                entity.TotalYearlySpend,
+                entity.PointsBalance
+            ).ToListAsync();
+
+            entity.CustomerId = newCustomerId.FirstOrDefault();
             var result = _mapper.Map<CustomerDto>(entity);
             return CreatedAtAction(nameof(Get), new { id = entity.CustomerId }, result);
         }

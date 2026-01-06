@@ -31,13 +31,18 @@ public class ProductsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns all products.
+    /// Returns paginated products.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<ProductDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<ProductDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var list = await _context.Products.ToListAsync();
-        return _mapper.Map<List<ProductDto>>(list);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.Products.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<ProductDto>>(items);
+        return new PaginatedResult<ProductDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>
@@ -96,14 +101,19 @@ public class ProductsController : ControllerBase
     }
 
     /// <summary>
-    /// Searches for products by keyword.
+    /// Searches for products by keyword with pagination.
     /// </summary>
     /// <param name="keyword">Search keyword</param>
-    /// <returns>List of products matching the keyword</returns>
+    /// <param name="page">Page number (default: 1)</param>
+    /// <param name="pageSize">Items per page (default: 20)</param>
+    /// <returns>Paginated list of products matching the keyword</returns>
     [HttpGet("search")]
-    public async Task<ActionResult<List<ProductSearchDto>>> SearchProduct([FromQuery] string keyword)
+    public async Task<ActionResult<PaginatedResult<ProductSearchDto>>> SearchProduct([FromQuery] string keyword, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var results = new List<ProductSearchDto>();
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+
+        var allResults = new List<ProductSearchDto>();
         
         using (var command = _context.Database.GetDbConnection().CreateCommand())
         {
@@ -118,7 +128,7 @@ public class ProductsController : ControllerBase
             {
                 while (await reader.ReadAsync())
                 {
-                    results.Add(new ProductSearchDto
+                    allResults.Add(new ProductSearchDto
                     {
                         ProductId = reader.GetInt32(0),
                         Name = reader.GetString(1),
@@ -130,18 +140,25 @@ public class ProductsController : ControllerBase
             }
         }
         
-        return results;
+        var total = allResults.Count;
+        var items = allResults.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return new PaginatedResult<ProductSearchDto> { Items = items, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>
-    /// Searches for medicine products by keyword.
+    /// Searches for medicine products by keyword with pagination.
     /// </summary>
     /// <param name="keyword">Search keyword</param>
-    /// <returns>List of medicine products matching the keyword</returns>
+    /// <param name="page">Page number (default: 1)</param>
+    /// <param name="pageSize">Items per page (default: 20)</param>
+    /// <returns>Paginated list of medicine products matching the keyword</returns>
     [HttpGet("search-medicine")]
-    public async Task<ActionResult<List<MedicineSearchDto>>> SearchMedicine([FromQuery] string keyword)
+    public async Task<ActionResult<PaginatedResult<MedicineSearchDto>>> SearchMedicine([FromQuery] string keyword, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var results = new List<MedicineSearchDto>();
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+
+        var allResults = new List<MedicineSearchDto>();
         
         using (var command = _context.Database.GetDbConnection().CreateCommand())
         {
@@ -156,7 +173,7 @@ public class ProductsController : ControllerBase
             {
                 while (await reader.ReadAsync())
                 {
-                    results.Add(new MedicineSearchDto
+                    allResults.Add(new MedicineSearchDto
                     {
                         ProductId = reader.GetInt32(0),
                         Name = reader.GetString(1),
@@ -167,7 +184,9 @@ public class ProductsController : ControllerBase
             }
         }
         
-        return results;
+        var total = allResults.Count;
+        var items = allResults.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return new PaginatedResult<MedicineSearchDto> { Items = items, TotalCount = total, Page = page, PageSize = pageSize };
     }
 }
 

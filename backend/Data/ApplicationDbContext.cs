@@ -112,7 +112,8 @@ public partial class ApplicationDbContext : DbContext
             var conn = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
             if (!string.IsNullOrEmpty(conn))
             {
-                optionsBuilder.UseSqlServer(conn);
+                optionsBuilder.UseSqlServer(conn, options => 
+                    options.UseCompatibilityLevel(130)); // SQL Server 2016+
             }
         }
     }

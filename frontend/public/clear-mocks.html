@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Mock Settings</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 100px auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .status {
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .code {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-family: monospace;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Clear Mock API Settings</h1>
+    
+    <div id="status"></div>
+    
+    <button onclick="clearMocks()">Clear Mock Settings</button>
+    <button onclick="checkStatus()">Check Current Status</button>
+    
+    <div class="code">
+        <strong>Current Settings:</strong><br>
+        <span id="current-settings">Loading...</span>
+    </div>
+    
+    <div class="code">
+        <strong>Environment Variables:</strong><br>
+        NEXT_PUBLIC_API_URL: <span id="api-url">Not set</span><br>
+        NEXT_PUBLIC_USE_MOCKS: <span id="use-mocks">Not set</span>
+    </div>
+
+    <script>
+        function clearMocks() {
+            localStorage.removeItem('useMocks');
+            localStorage.setItem('useMocks', 'false');
+            showStatus('✅ Mock settings cleared! LocalStorage.useMocks = false', 'success');
+            checkStatus();
+        }
+
+        function checkStatus() {
+            const useMocks = localStorage.getItem('useMocks');
+            document.getElementById('current-settings').textContent = 
+                `localStorage.useMocks = ${useMocks || 'not set'}`;
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+        }
+
+        // Check on load
+        checkStatus();
+        
+        // Show environment info
+        // Note: In production build, env vars are baked in at build time
+        setTimeout(() => {
+            showStatus('ℹ️ After clearing, refresh your app page (Ctrl+F5)', 'success');
+        }, 100);
+    </script>
+</body>
+</html>

@@ -3,10 +3,19 @@
 import * as mock from './mockApi'
 
 function useMocks(): boolean {
+  // FORCE DISABLE MOCKS - Always use real backend
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    console.log('🔧 Using real backend API:', process.env.NEXT_PUBLIC_API_URL)
+    return false
+  }
+  
   try {
     if (typeof window !== 'undefined') {
       const v = localStorage.getItem('useMocks')
-      if (v === 'true') return true
+      if (v === 'true') {
+        console.log('⚠️ localStorage.useMocks is true - using mock data')
+        return true
+      }
     }
   } catch {}
   if ((process.env as any).NEXT_PUBLIC_USE_MOCKS === 'true') return true

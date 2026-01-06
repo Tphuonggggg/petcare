@@ -25,13 +25,18 @@ public class BookingHistoriesController : ControllerBase
     public BookingHistoriesController(ApplicationDbContext context, IMapper mapper) { _context = context; _mapper = mapper; }
 
     /// <summary>
-    /// Returns all booking history entries.
+    /// Returns paginated booking history entries.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<BookingHistoryDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<BookingHistoryDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var list = await _context.BookingHistories.ToListAsync();
-        return _mapper.Map<List<BookingHistoryDto>>(list);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.BookingHistories.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<BookingHistoryDto>>(items);
+        return new PaginatedResult<BookingHistoryDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>
@@ -64,7 +69,7 @@ public class BookingHistoriesController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Put(int id, BookingHistoryDto dto)
     {
-        if (id != dto.HistoryId) return BadRequest();
+        if (id != dto.HistoryId.GetValueOrDefault()) return BadRequest();
         var entity = _mapper.Map<BookingHistory>(dto);
         _context.Entry(entity).State = EntityState.Modified;
         try { await _context.SaveChangesAsync(); }

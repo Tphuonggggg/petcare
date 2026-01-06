@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -8,7 +9,8 @@ namespace PetCareX.Api.Dtos;
 public class VaccinePackageDto
 {
     /// <summary>Package primary key.</summary>
-    public int PackageId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? PackageId { get; set; }
 
     /// <summary>Package name.</summary>
     [Required]

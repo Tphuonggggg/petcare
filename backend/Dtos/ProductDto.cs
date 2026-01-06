@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -8,7 +9,8 @@ namespace PetCareX.Api.Dtos;
 public class ProductDto
 {
     /// <summary>Product primary key.</summary>
-    public int ProductId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? ProductId { get; set; }
 
     /// <summary>Product name.</summary>
     [Required]

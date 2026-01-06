@@ -30,13 +30,18 @@ public class InvoiceItemsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns all invoice items.
+    /// Returns paginated invoice items.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<InvoiceItemDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<InvoiceItemDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var list = await _context.InvoiceItems.ToListAsync();
-        return _mapper.Map<List<InvoiceItemDto>>(list);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.InvoiceItems.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<InvoiceItemDto>>(items);
+        return new PaginatedResult<InvoiceItemDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>

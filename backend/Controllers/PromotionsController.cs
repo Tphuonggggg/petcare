@@ -29,13 +29,18 @@ public class PromotionsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns all promotions.
+    /// Returns paginated promotions.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<PromotionDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<PromotionDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var list = await _context.Promotions.ToListAsync();
-        return _mapper.Map<List<PromotionDto>>(list);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.Promotions.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<PromotionDto>>(items);
+        return new PaginatedResult<PromotionDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>

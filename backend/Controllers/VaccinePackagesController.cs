@@ -29,13 +29,18 @@ public class VaccinePackagesController : ControllerBase
     }
 
     /// <summary>
-    /// Returns all vaccine packages.
+    /// Returns paginated vaccine packages.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<VaccinePackageDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<VaccinePackageDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var entities = await _context.VaccinePackages.ToListAsync();
-        return _mapper.Map<List<VaccinePackageDto>>(entities);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.VaccinePackages.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<VaccinePackageDto>>(items);
+        return new PaginatedResult<VaccinePackageDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>

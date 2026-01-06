@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -9,7 +10,8 @@ namespace PetCareX.Api.Dtos;
 public class LoyaltyTransactionDto
 {
     /// <summary>Transaction primary key.</summary>
-    public int LoyaltyTransId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? LoyaltyTransId { get; set; }
 
     /// <summary>Customer affected (optional).</summary>
     public int? CustomerId { get; set; }

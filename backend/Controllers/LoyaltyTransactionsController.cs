@@ -30,13 +30,18 @@ public class LoyaltyTransactionsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns all loyalty transactions.
+    /// Returns paginated loyalty transactions.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<LoyaltyTransactionDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<LoyaltyTransactionDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var list = await _context.LoyaltyTransactions.ToListAsync();
-        return _mapper.Map<List<LoyaltyTransactionDto>>(list);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.LoyaltyTransactions.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<LoyaltyTransactionDto>>(items);
+        return new PaginatedResult<LoyaltyTransactionDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>

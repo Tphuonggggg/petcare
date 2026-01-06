@@ -1,7 +1,7 @@
 "use client"
 import React from 'react'
 import Link from 'next/link'
-import ReportFilters from '../../../../components/report/ReportFilters'
+// import ReportFilters from '../../../../components/report/ReportFilters'
 
 export default function CompanyReports() {
   return (

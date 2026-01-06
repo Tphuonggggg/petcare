@@ -25,20 +25,25 @@ public class BranchServicesController : ControllerBase
     public BranchServicesController(ApplicationDbContext context, IMapper mapper) { _context = context; _mapper = mapper; }
 
     /// <summary>
-    /// Returns all branch services.
+    /// Returns paginated branch services.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<BranchServiceDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<BranchServiceDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var list = await _context.BranchServices.ToListAsync();
-        return _mapper.Map<List<BranchServiceDto>>(list);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.BranchServices.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<BranchServiceDto>>(items);
+        return new PaginatedResult<BranchServiceDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>
     /// Gets a branch service by composite id.
     /// </summary>
     [HttpGet("{branchId}/{serviceId}")]
-    public async Task<ActionResult<BranchServiceDto>> Get(int branchId, int serviceId)
+    public async Task<ActionResult<BranchServiceDto>> GetById(int branchId, int serviceId)
     {
         var e = await _context.BranchServices.FindAsync(branchId, serviceId);
         if (e == null) return NotFound();
@@ -55,7 +60,7 @@ public class BranchServicesController : ControllerBase
         _context.BranchServices.Add(entity);
         await _context.SaveChangesAsync();
         var result = _mapper.Map<BranchServiceDto>(entity);
-        return CreatedAtAction(nameof(Get), new { branchId = entity.BranchId, serviceId = entity.ServiceId }, result);
+        return CreatedAtAction(nameof(GetById), new { branchId = entity.BranchId, serviceId = entity.ServiceId }, result);
     }
 
     /// <summary>

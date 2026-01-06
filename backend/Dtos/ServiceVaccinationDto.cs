@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -9,7 +10,8 @@ namespace PetCareX.Api.Dtos;
 public class ServiceVaccinationDto
 {
     /// <summary>Vaccination record id.</summary>
-    public int VaccinationId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? VaccinationId { get; set; }
 
     /// <summary>Vaccine id used.</summary>
     [Required]

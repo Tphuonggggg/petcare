@@ -1,11 +1,4 @@
-﻿USE master;
-GO
-IF DB_ID('PetCare') IS NOT NULL
-BEGIN
-    ALTER DATABASE PetCare SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-    DROP DATABASE PetCare;
-END
-GO
+﻿
 CREATE DATABASE PetCare;
 GO
 USE PetCare;
@@ -416,7 +409,43 @@ CREATE TABLE VaccineRecord (
     FOREIGN KEY (InvoiceItemID) REFERENCES InvoiceItem(InvoiceItemID)
 );
 GO
+USE PetCare;
+GO
 
+CREATE TABLE Account (
+    AccountID INT IDENTITY(1,1) PRIMARY KEY,
+    Username VARCHAR(50) NOT NULL UNIQUE,
+    PasswordHash VARCHAR(255) NOT NULL, -- Lưu mật khẩu đã mã hóa (BCrypt/Argon2)
+    Role NVARCHAR(20) NOT NULL,
+    IsActive BIT DEFAULT 1,
+    
+    -- Liên kết đến đối tượng sở hữu
+    EmployeeID INT NULL,
+    CustomerID INT NULL,
+
+    -- RÀNG BUỘC 1: Một tài khoản phải thuộc về HOẶC nhân viên HOẶC khách hàng (Exclusive OR)
+    CONSTRAINT CK_Account_Owner 
+    CHECK (
+        (EmployeeID IS NOT NULL AND CustomerID IS NULL) OR 
+        (CustomerID IS NOT NULL AND EmployeeID IS NULL)
+    ),
+
+    -- RÀNG BUỘC 2: Kiểm tra vai trò hợp lệ
+    -- Role chỉ có 2 loại: EMPLOYEE (nhân viên) hoặc CUSTOMER (khách hàng)
+    -- Role thực tế của employee (Doctor, Receptionist, Sales, Manager) dựa vào PositionID
+    CONSTRAINT CK_Account_Role 
+    CHECK (Role IN ('EMPLOYEE', 'CUSTOMER')),
+
+    FOREIGN KEY (EmployeeID) REFERENCES Employee(EmployeeID),
+    FOREIGN KEY (CustomerID) REFERENCES Customer(CustomerID)
+);
+GO
+
+-- Index để tăng tốc độ đăng nhập
+CREATE NONCLUSTERED INDEX IDX_Account_Login ON Account(Username, IsActive);
+CREATE UNIQUE NONCLUSTERED INDEX UQ_Account_EmployeeID ON Account(EmployeeID) WHERE EmployeeID IS NOT NULL;
+CREATE UNIQUE NONCLUSTERED INDEX UQ_Account_CustomerID ON Account(CustomerID) WHERE CustomerID IS NOT NULL;
+GO
 --1)
 --InvoiceItem: thiếu ràng buộc “chỉ được chọn 1 trong 2”
 -- Hiện tại ItemType là PRODUCT/SERVICE nhưng ProductID và ServiceID đều để NULL được, hoặc tệ hơn là cả hai cùng có giá trị → dữ liệu bẩn.
@@ -686,37 +715,27 @@ VALUES
 GO
 --VaccineBatch
 DECLARE @VaccineID INT, @BranchID INT;
-
-DECLARE vaccine_cursor CURSOR FOR
-    SELECT VaccineID FROM Vaccine;
-
-DECLARE branch_cursor CURSOR FOR
-    SELECT BranchID FROM Branch;
-
+DECLARE vaccine_cursor CURSOR FOR SELECT VaccineID FROM Vaccine;
 OPEN vaccine_cursor;
 FETCH NEXT FROM vaccine_cursor INTO @VaccineID;
-
 WHILE @@FETCH_STATUS = 0
 BEGIN
+    DECLARE branch_cursor CURSOR FOR SELECT BranchID FROM Branch; -- Khai báo bên trong
     OPEN branch_cursor;
     FETCH NEXT FROM branch_cursor INTO @BranchID;
-
     WHILE @@FETCH_STATUS = 0
     BEGIN
         INSERT INTO VaccineBatch (VaccineID, BranchID, ManufactureDate, ExpiryDate, Quantity)
         VALUES (
-            @VaccineID,
-            @BranchID,
-            DATEADD(DAY, -ABS(CHECKSUM(NEWID())) % 400, GETDATE()), -- random 400 ngày trước
-            DATEADD(DAY,  ABS(CHECKSUM(NEWID())) % 400 + 30, GETDATE()), -- hết hạn sau >= 30 ngày
-            (ABS(CHECKSUM(NEWID())) % 150) + 50  -- quantity 50–200
+            @VaccineID, @BranchID,
+            DATEADD(DAY, -ABS(CHECKSUM(NEWID())) % 730, GETDATE()), 
+            DATEADD(DAY, (ABS(CHECKSUM(NEWID())) % 730) + 30, GETDATE()), 
+            (ABS(CHECKSUM(NEWID())) % 150) + 50 
         );
-
         FETCH NEXT FROM branch_cursor INTO @BranchID;
     END
-
     CLOSE branch_cursor;
-
+    DEALLOCATE branch_cursor; -- Giải phóng ngay sau khi kết thúc 1 chi nhánh
     FETCH NEXT FROM vaccine_cursor INTO @VaccineID;
 END
 CLOSE vaccine_cursor;
@@ -1074,10 +1093,10 @@ SELECT
     ABS(CHECKSUM(NEWID())) % (SELECT COUNT(*) FROM Customer) + 1 AS CustomerID,
     ABS(CHECKSUM(NEWID())) % (SELECT COUNT(*) FROM Employee) + 1 AS EmployeeID,
     DATEADD(
-        DAY,
-        ABS(CHECKSUM(NEWID())) % DATEDIFF(DAY, '2023-01-01', GETDATE()),
-        '2023-01-01'
-    ) AS InvoiceDate,
+    MINUTE, 
+    -ABS(CHECKSUM(NEWID())) % 525600, 
+    GETDATE()
+	) AS InvoiceDate,
 
     T.TotalAmount,
 
@@ -1203,38 +1222,36 @@ GO
         ABS(CHECKSUM(NEWID())) % (SELECT COUNT(*) FROM Customer) + 1 AS CustID
     FROM master..spt_values a CROSS JOIN master..spt_values b
 )
-INSERT INTO Booking (CustomerID, PetID, BookingType, RequestedDateTime, Status, Notes)
+INSERT INTO Booking (CustomerID, PetID, BookingType, RequestedDateTime, Status, Notes, CreatedAt)
 SELECT 
     C.CustomerID,
-
-    -- CHỌN ĐÚNG 1 PET CỦA CUSTOMER (KHÔNG BAO GIỜ NULL)
-    ISNULL(
-        (SELECT TOP 1 PetID FROM Pet WHERE CustomerID = C.CustomerID ORDER BY NEWID()),
-        (SELECT TOP 1 PetID FROM Pet ORDER BY NEWID())   -- fallback nếu customer chưa có pet (hiếm)
-    ) AS PetID,
-
-    CASE ABS(CHECKSUM(NEWID())) % 2
-        WHEN 0 THEN 'CheckHealth'
-        ELSE 'Vaccination'
-    END AS BookingType,
-
-    DATEADD(
-        DAY,
-        ABS(CHECKSUM(NEWID())) % 700,
-        '2023-01-01'
-    ) AS RequestedDateTime,
-
-    -- FIX STATUS LUÔN CÓ GIÁ TRỊ
-    CASE ABS(CHECKSUM(NEWID())) % 4
-        WHEN 0 THEN 'Pending'
-        WHEN 1 THEN 'Confirmed'
-        WHEN 2 THEN 'Completed'
-        ELSE 'Cancelled'
-    END AS Status,
-
-    N'Khách đặt lịch' AS Notes
+    ISNULL((SELECT TOP 1 PetID FROM Pet WHERE CustomerID = C.CustomerID ORDER BY NEWID()), (SELECT TOP 1 PetID FROM Pet ORDER BY NEWID())),
+    CASE ABS(CHECKSUM(NEWID())) % 2 WHEN 0 THEN 'CheckHealth' ELSE 'Vaccination' END,
+    
+    -- Ngày hẹn (RequestedDateTime)
+    T.RequestedDate,
+    
+    -- Trạng thái (Status)
+    T.RndStatus,
+    N'Khách đặt lịch 2026',
+    
+    -- Ngày tạo (CreatedAt): Luôn trước ngày hẹn từ 1-7 ngày
+    DATEADD(DAY, -(ABS(CHECKSUM(NEWID())) % 7 + 1), T.RequestedDate) 
 FROM B
-JOIN Customer C ON C.CustomerID = B.CustID;
+JOIN Customer C ON C.CustomerID = B.CustID
+CROSS APPLY (
+    SELECT 
+        -- Random trạng thái
+        CASE ABS(CHECKSUM(NEWID())) % 4 
+            WHEN 0 THEN 'Pending' WHEN 1 THEN 'Confirmed' WHEN 2 THEN 'Completed' ELSE 'Cancelled' 
+        END AS RndStatus,
+        -- Tính toán ngày hẹn dựa trên trạng thái
+        CASE 
+            WHEN ABS(CHECKSUM(NEWID())) % 4 IN (2, 3) -- Completed hoặc Cancelled
+                THEN DATEADD(DAY, -(ABS(CHECKSUM(NEWID())) % 30), GETDATE()) -- Trong 30 ngày qua
+            ELSE DATEADD(DAY, (ABS(CHECKSUM(NEWID())) % 60), GETDATE()) -- Trong 60 ngày tới
+        END AS RequestedDate
+) T;
 GO
 --Dữ liệu BookingHistory
 ;WITH BH AS (
@@ -1243,49 +1260,17 @@ GO
         (SELECT TOP 1 BookingID FROM Booking ORDER BY NEWID()) AS BookingID
     FROM master..spt_values a CROSS JOIN master..spt_values b
 )
-INSERT INTO BookingHistory (BookingID, ActionType, OldDateTime, NewDateTime, OldStatus, NewStatus, Notes)
+INSERT INTO BookingHistory (BookingID, ActionType, OldDateTime, NewDateTime, OldStatus, NewStatus, Notes, Timestamp)
 SELECT 
     B.BookingID,
-
-    -- KHÔNG BAO GIỜ NULL
-    CASE ABS(CHECKSUM(NEWID())) % 4
-        WHEN 0 THEN 'CREATE'
-        WHEN 1 THEN 'UPDATE'
-        WHEN 2 THEN 'RESCHEDULE'
-        ELSE 'CANCEL'
-    END AS ActionType,
-
-    DATEADD(
-        DAY,
-        - (ABS(CHECKSUM(NEWID())) % 100),
-        (SELECT RequestedDateTime FROM Booking WHERE BookingID = B.BookingID)
-    ) AS OldDateTime,
-
-    DATEADD(
-        DAY,
-        (ABS(CHECKSUM(NEWID())) % 50),
-        (SELECT RequestedDateTime FROM Booking WHERE BookingID = B.BookingID)
-    ) AS NewDateTime,
-
-    -- FIX OldStatus không NULL
-    CASE ABS(CHECKSUM(NEWID())) % 4
-        WHEN 0 THEN 'Pending'
-        WHEN 1 THEN 'Confirmed'
-        WHEN 2 THEN 'Completed'
-        ELSE 'Cancelled'
-    END AS OldStatus,
-
-    -- FIX NewStatus không NULL
-    CASE ABS(CHECKSUM(NEWID())) % 4
-        WHEN 0 THEN 'Pending'
-        WHEN 1 THEN 'Confirmed'
-        WHEN 2 THEN 'Completed'
-        ELSE 'Cancelled'
-    END AS NewStatus,
-
-    N'Update lịch đặt' AS Notes
-
-FROM BH B;
+    'UPDATE_STATUS',
+    DATEADD(HOUR, -2, RequestedDateTime),
+    RequestedDateTime,
+    'Pending',
+    Status,
+    N'Cập nhật trạng thái tự động',
+    GETDATE()
+FROM (SELECT TOP 600000 BookingID, RequestedDateTime, Status FROM Booking ORDER BY NEWID()) B;
 GO
 --CHeckHealth
 ;WITH CH AS (
@@ -1293,13 +1278,13 @@ GO
         ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS rn
     FROM master..spt_values a CROSS JOIN master..spt_values b
 )
-INSERT INTO CheckHealth (PetID, DoctorID, Symptoms, Diagnosis, Prescription, FollowUpDate)
+INSERT INTO CheckHealth (PetID, DoctorID, CheckDate, Symptoms, Diagnosis, Prescription, FollowUpDate)
 SELECT 
-    -- Random Pet
     (SELECT TOP 1 PetID FROM Pet ORDER BY NEWID()),
-
-    -- Random Bác sĩ (PositionID = 1)
     (SELECT TOP 1 EmployeeID FROM Employee WHERE PositionID = 1 ORDER BY NEWID()),
+    
+    -- CheckDate: Random trong vòng 365 ngày trước tính đến hiện tại
+    DATEADD(MINUTE, -ABS(CHECKSUM(NEWID())) % 525600, GETDATE()) AS CheckDate,
 
     -- Symptoms
     CASE ABS(CHECKSUM(NEWID())) % 5
@@ -1330,10 +1315,9 @@ SELECT
 
     -- Follow up date
     CASE WHEN ABS(CHECKSUM(NEWID())) % 3 = 0 
-         THEN DATEADD(DAY, ABS(CHECKSUM(NEWID())) % 14, GETDATE())
+         THEN DATEADD(DAY, (ABS(CHECKSUM(NEWID())) % 11) + 3, GETDATE()) -- Tương lai
          ELSE NULL END
-
-FROM CH;  
+FROM CH; 
 GO
 --VaccineRecord
 ;WITH VR AS (
@@ -1351,13 +1335,10 @@ SELECT
     (SELECT TOP 1 InvoiceItemID FROM InvoiceItem ORDER BY NEWID()),
     CAST((ABS(CHECKSUM(NEWID())) % 5) + 1 AS DECIMAL(6,2)),
 
-    da.DateAdministered,
-
-    DATEADD(DAY, (ABS(CHECKSUM(NEWID())) % 60) + 30, da.DateAdministered) AS NextDueDate
-FROM VR
-CROSS APPLY (
-    SELECT DATEADD(DAY, ABS(CHECKSUM(NEWID())) % DATEDIFF(DAY, '2023-01-01', GETDATE()), '2023-01-01') AS DateAdministered
-) da;
+    -- Ngày tiêm: Trải dài trong 1 năm qua
+    DATEADD(MINUTE, -ABS(CHECKSUM(NEWID())) % 100000, GETDATE()) AS DateAdministered,
+	DATEADD(DAY, (ABS(CHECKSUM(NEWID())) % 180) + 30, GETDATE()) AS NextDueDate
+FROM VR;
 GO
 --ServiceVaccination
 ;WITH SV AS (
@@ -1393,6 +1374,118 @@ FROM VaccinePackage P
 CROSS JOIN Vaccine V;
 GO
 
+---account---
+-- A. Tạo tài khoản cho TOÀN BỘ Nhân viên (1,000 nhân viên)
+-- Username: tên không dấu + ID nhân viên (để tránh trùng lặp)
+-- Password mặc định: '123456'
+INSERT INTO Account (Username, PasswordHash, Role, EmployeeID)
+SELECT 
+    LOWER(REPLACE(dbo.RemoveVietnameseAccent(FullName), ' ', '')) + CAST(EmployeeID AS VARCHAR),
+    'e10adc3949ba59abbe56e057f20f883e', -- MD5 của '123456'
+    'EMPLOYEE',  -- Tất cả nhân viên có role là EMPLOYEE, vị trí thực tế dựa vào PositionID
+    EmployeeID
+FROM Employee;
+GO
+
+-- B. Tạo tài khoản cho TOÀN BỘ Khách hàng (70,000 khách hàng)
+-- Username: Sử dụng số điện thoại (Phone) làm tên đăng nhập
+-- Password mặc định: '123456'
+INSERT INTO Account (Username, PasswordHash, Role, CustomerID)
+SELECT 
+    Phone, 
+    'e10adc3949ba59abbe56e057f20f883e',
+    'CUSTOMER',
+    CustomerID
+FROM Customer;
+GO
+
+
+-- Trigger cho bảng Employee
+CREATE OR ALTER TRIGGER trg_Employee_CreateAccount
+ON Employee
+AFTER INSERT
+AS
+BEGIN
+    -- Chỉ tạo tài khoản nếu EmployeeID đó chưa có trong bảng Account
+    INSERT INTO Account (Username, PasswordHash, Role, EmployeeID)
+    SELECT 
+        LOWER(REPLACE(dbo.RemoveVietnameseAccent(i.FullName), ' ', '')) + CAST(i.EmployeeID AS VARCHAR),
+        'e10adc3949ba59abbe56e057f20f883e',
+        'EMPLOYEE',  -- Tất cả nhân viên có role là EMPLOYEE, vị trí thực tế dựa vào PositionID
+        i.EmployeeID
+    FROM inserted i
+    WHERE NOT EXISTS (SELECT 1 FROM Account WHERE EmployeeID = i.EmployeeID);
+END;
+GO
+
+-- Trigger cho bảng Customer
+CREATE OR ALTER TRIGGER trg_Customer_CreateAccount
+ON Customer
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO Account (Username, PasswordHash, Role, CustomerID)
+    SELECT 
+        i.Phone,
+        'e10adc3949ba59abbe56e057f20f883e',
+        'CUSTOMER',
+        i.CustomerID
+    FROM inserted i
+    WHERE NOT EXISTS (SELECT 1 FROM Account WHERE CustomerID = i.CustomerID);
+END;
+GO
+
+
+-- Thủ tục đăng nhập trả về thông tin người dùng
+-- CHÈN VÀO SAU KHI TẠO BẢNG ACCOUNT --
+
+-- 1. Thủ tục Đăng nhập (Bản nâng cấp)
+CREATE PROC sp_Account_Login
+    @Username VARCHAR(50),
+    @PasswordHash VARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (SELECT 1 FROM Account WHERE Username = @Username AND PasswordHash = @PasswordHash AND IsActive = 1)
+    BEGIN
+        SELECT 
+            A.AccountID, A.Username, A.Role,
+            ISNULL(E.FullName, C.FullName) AS DisplayName,
+            A.EmployeeID, A.CustomerID,
+            ISNULL(E.BranchID, 0) AS BranchID,
+            E.PositionID
+        FROM Account A
+        LEFT JOIN Employee E ON A.EmployeeID = E.EmployeeID
+        LEFT JOIN Customer C ON A.CustomerID = C.CustomerID
+        WHERE A.Username = @Username AND A.PasswordHash = @PasswordHash;
+    END
+    ELSE
+    BEGIN
+        RAISERROR(N'Tài khoản không chính xác hoặc đã bị khóa', 16, 1);
+    END
+END;
+GO
+
+-- 2. Thủ tục Khóa/Mở tài khoản (Thay vì xóa)
+CREATE PROC sp_Account_ToggleStatus
+    @AccountID INT,
+    @Status BIT
+AS
+BEGIN
+    UPDATE Account SET IsActive = @Status WHERE AccountID = @AccountID;
+END;
+GO
+
+-- 3. Thủ tục Reset mật khẩu (Dành cho Admin)
+CREATE PROC sp_Account_ResetPassword
+    @AccountID INT,
+    @NewPasswordHash VARCHAR(255) = 'e10adc3949ba59abbe56e057f20f883e' -- Mặc định là '123456'
+AS
+BEGIN
+    UPDATE Account SET PasswordHash = @NewPasswordHash WHERE AccountID = @AccountID;
+    PRINT N'Mật khẩu đã được reset về mặc định';
+END;
+GO
 
 --------------------------------------CRUD-----------------------------------------
 ----------Create Vaccine------------------
@@ -3160,6 +3253,489 @@ BEGIN
       AND CAST(VR.DateAdministered AS DATE) = @Date
       
     ORDER BY AppointmentTime;
+END;
+GO
+
+UPDATE C
+SET TotalYearlySpend = ISNULL(T.Total, 0),
+    PointsBalance = ISNULL(T.Total, 0) / 50000
+FROM Customer C
+LEFT JOIN (SELECT CustomerID, SUM(FinalAmount) AS Total FROM Invoice GROUP BY CustomerID) T 
+ON C.CustomerID = T.CustomerID;
+
+/*============================================================
+  Tên: usp_Customer_GetInvoiceHistory
+  Chức năng:
+    - Khách hàng xem lịch sử mua hàng
+  Đối tượnng dùng:
+    - Khách hàng 
+============================================================*/
+CREATE PROCEDURE usp_Customer_GetInvoiceHistory
+    @CustomerID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        I.InvoiceID,
+        I.InvoiceDate,
+        B.Name AS BranchName,
+        I.TotalAmount,
+        I.DiscountAmount,
+        I.FinalAmount,
+        I.PaymentMethod
+    FROM Invoice I
+    JOIN Branch B ON I.BranchID = B.BranchID
+    WHERE I.CustomerID = @CustomerID
+    ORDER BY I.InvoiceDate DESC;
+END;
+GO
+
+/*============================================================
+  Tên: usp_Customer_SearchProducts
+  Chức năng::
+    - Khách hàng tìm kiếm sản phẩm còn hàng
+  Đối tượnng dùng:
+    - Khách hàng 
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Customer_SearchProducts
+    @Keyword NVARCHAR(100) = NULL,
+    @Category NVARCHAR(50) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        ProductID, Name, Category, Price, StockQty, Description
+    FROM Product
+    WHERE (@Keyword IS NULL OR Name LIKE '%' + @Keyword + '%')
+      AND (@Category IS NULL OR Category = @Category)
+      AND StockQty > 0 -- Chỉ hiển thị sản phẩm còn hàng
+    ORDER BY Category, Name;
+END;
+GO
+
+/*============================================================
+  Tên: usp_Customer_PurchaseProduct
+  Chức năng:
+    - Khách hàng thực hiện mua sắm
+  Mô tả:
+    - Tạo hóa đơn và trừ kho sản phẩm
+  Đối tượng dùng:
+    - Khách hàng
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Customer_PurchaseProduct
+    @CustomerID INT,
+    @BranchID INT,
+    @EmployeeID INT, -- Nhân viên hỗ trợ tại quầy
+    @ProductID INT,
+    @Quantity INT,
+    @PaymentMethod NVARCHAR(20),
+    @PetID INT = NULL -- Có thể gắn với 1 thú cưng cụ thể
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- 1. Kiểm tra tồn kho trước khi tạo hóa đơn
+        DECLARE @AvailableStock INT;
+        SELECT @AvailableStock = StockQty FROM Product WHERE ProductID = @ProductID;
+
+        IF @AvailableStock < @Quantity
+        BEGIN
+            RAISERROR(N'Số lượng sản phẩm trong kho không đủ.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+        
+        -- 2. Lấy đơn giá sản phẩm hiện tại
+        DECLARE @Price DECIMAL(14,2);
+        SELECT @Price = Price FROM Product WHERE ProductID = @ProductID;
+        
+        -- 3. Khởi tạo hóa đơn
+        INSERT INTO Invoice (BranchID, CustomerID, EmployeeID, PetID, TotalAmount, PaymentMethod)
+        VALUES (@BranchID, @CustomerID, @EmployeeID, @PetID, @Price * @Quantity, @PaymentMethod);
+
+        DECLARE @NewInvoiceID INT = SCOPE_IDENTITY();
+        
+        -- 4. Thêm sản phẩm vào chi tiết hóa đơn
+        INSERT INTO InvoiceItem (InvoiceID, ItemType, ProductID, ServiceID, Quantity, UnitPrice)
+        VALUES (@NewInvoiceID, 'PRODUCT', @ProductID, NULL, @Quantity, @Price);
+
+        COMMIT TRANSACTION;
+        PRINT N'Mua hàng thành công! Mã hóa đơn: ' + CAST(@NewInvoiceID AS NVARCHAR(10));
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        DECLARE @ErrorMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@ErrorMsg, 16, 1);
+    END CATCH
+END;
+GO
+
+/*============================================================
+  Tên: usp_Staff_RegisterNewPet
+  Chức năng: Nhân viên tiếp tân đăng ký thú cưng mới cho khách hàng
+  Mô tả: 
+    - Kiểm tra CustomerID có tồn tại không.
+    - Kiểm tra tên thú cưng đã tồn tại với khách hàng này chưa.
+    - Mặc định trạng thái ban đầu là 'Healthy'.
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Staff_RegisterNewPet
+    @CustomerID INT,
+    @PetName NVARCHAR(100),
+    @Species NVARCHAR(50),
+    @Breed NVARCHAR(100) = NULL,
+    @BirthDate DATE = NULL,
+    @Gender CHAR(1), -- 'M', 'F', 'U'
+    @Status NVARCHAR(50) = N'Healthy'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- 1. Kiểm tra khách hàng có tồn tại không
+    IF NOT EXISTS (SELECT 1 FROM Customer WHERE CustomerID = @CustomerID)
+    BEGIN
+        RAISERROR(N'Khách hàng không tồn tại. Vui lòng đăng ký khách hàng trước.', 16, 1);
+        RETURN;
+    END
+
+    -- 2. Kiểm tra trùng tên thú cưng của cùng một chủ (Dựa trên UQ_Pet_Customer_Name)
+    IF EXISTS (SELECT 1 FROM Pet WHERE CustomerID = @CustomerID AND Name = @PetName)
+    BEGIN
+        RAISERROR(N'Khách hàng này đã đăng ký thú cưng có tên này rồi.', 16, 1);
+        RETURN;
+    END
+
+    -- 3. Thêm mới thú cưng
+    BEGIN TRY
+        INSERT INTO Pet (CustomerID, Name, Species, Breed, BirthDate, Gender, Status)
+        VALUES (@CustomerID, @PetName, @Species, @Breed, @BirthDate, @Gender, @Status);
+        
+        DECLARE @NewPetID INT = SCOPE_IDENTITY();
+        PRINT N'Đã đăng ký thành công thú cưng mới. ID: ' + CAST(@NewPetID AS NVARCHAR(10));
+        
+        -- Trả về thông tin thú cưng vừa tạo để tiếp tân xác nhận
+        SELECT * FROM Pet WHERE PetID = @NewPetID;
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@ErrorMsg, 16, 1);
+    END CATCH
+END;
+GO
+
+/*============================================================
+  Thêm cột Status vào bảng Invoice
+============================================================*/
+ALTER TABLE Invoice 
+ADD Status NVARCHAR(20) DEFAULT N'Pending'; -- Các trạng thái: Pending, Paid, Cancelled
+
+GO
+/*============================================================
+  Tên: usp_Staff_CreateOrder
+  Chức năng: Khởi tạo một đơn hàng mới (Trạng thái Pending)
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Staff_CreateOrder
+    @BranchID INT,
+    @CustomerID INT,
+    @EmployeeID INT,
+    @PetID INT = NULL,
+    @PaymentMethod NVARCHAR(20) = 'CASH'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    INSERT INTO Invoice (BranchID, CustomerID, EmployeeID, PetID, InvoiceDate, TotalAmount, DiscountAmount, PaymentMethod, Status)
+    VALUES (@BranchID, @CustomerID, @EmployeeID, @PetID, GETDATE(), 0.01, 0, @PaymentMethod, N'Pending');
+    
+    DECLARE @NewInvoiceID INT = SCOPE_IDENTITY();
+    
+    PRINT N'Đã khởi tạo đơn hàng số: ' + CAST(@NewInvoiceID AS NVARCHAR(10));
+    SELECT @NewInvoiceID AS InvoiceID;
+END;
+GO
+
+/*============================================================
+  Tên: usp_Staff_AddItemToOrder
+  Chức năng: Thêm món vào đơn hàng đang chờ (Pending)
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Staff_AddItemToOrder
+    @InvoiceID INT,
+    @ItemType NVARCHAR(20), -- 'PRODUCT' hoặc 'SERVICE'
+    @ItemID INT,
+    @Quantity INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Kiểm tra hóa đơn có đang ở trạng thái Pending không
+    IF NOT EXISTS (SELECT 1 FROM Invoice WHERE InvoiceID = @InvoiceID AND Status = N'Pending')
+    BEGIN
+        RAISERROR(N'Đơn hàng đã thanh toán hoặc bị hủy, không thể thêm món.', 16, 1);
+        RETURN;
+    END
+
+    DECLARE @UnitPrice DECIMAL(14,2);
+    
+    -- Lấy giá hiện tại
+    IF @ItemType = 'PRODUCT'
+        SELECT @UnitPrice = Price FROM Product WHERE ProductID = @ItemID;
+    ELSE
+        SELECT @UnitPrice = BasePrice FROM Service WHERE ServiceID = @ItemID;
+
+    -- Thêm vào InvoiceItem (Trigger trg_InvoiceItem_UpdateInvoiceTotal sẽ tự tính lại tổng tiền Invoice)
+    INSERT INTO InvoiceItem (InvoiceID, ItemType, ProductID, ServiceID, Quantity, UnitPrice)
+    VALUES (@InvoiceID, @ItemType, 
+            CASE WHEN @ItemType = 'PRODUCT' THEN @ItemID ELSE NULL END,
+            CASE WHEN @ItemType = 'SERVICE' THEN @ItemID ELSE NULL END,
+            @Quantity, @UnitPrice);
+            
+    PRINT N'Đã thêm mục vào đơn hàng.';
+END;
+GO
+
+/*============================================================
+  Tên: usp_Staff_ConfirmInvoice
+  Chức năng: Xác nhận thanh toán hóa đơn
+  Mô tả: 
+    - Chuyển trạng thái sang Paid.
+    - Áp dụng ưu đãi nếu cần (Logic giảm giá có thể thêm ở đây).
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Staff_ConfirmInvoice
+    @InvoiceID INT,
+    @PaymentMethod NVARCHAR(20) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    IF NOT EXISTS (SELECT 1 FROM Invoice WHERE InvoiceID = @InvoiceID AND Status = N'Pending')
+    BEGIN
+        RAISERROR(N'Đơn hàng không ở trạng thái chờ xác nhận.', 16, 1);
+        RETURN;
+    END
+
+    -- Cập nhật trạng thái và phương thức thanh toán cuối cùng
+    UPDATE Invoice
+    SET Status = N'Paid',
+        PaymentMethod = ISNULL(@PaymentMethod, PaymentMethod),
+        InvoiceDate = GETDATE()
+    WHERE InvoiceID = @InvoiceID;
+
+    -- Trigger trg_Invoice_UpdateLoyalty (đã có trong file x.sql) 
+    -- sẽ tự động chạy sau lệnh UPDATE/INSERT để cộng điểm cho khách.
+
+    PRINT N'Xác nhận hóa đơn thành công. Hóa đơn đã được quyết toán.';
+    
+    -- Trả về thông tin cuối cùng để in hóa đơn
+    SELECT I.*, C.FullName AS CustomerName, E.FullName AS StaffName
+    FROM Invoice I
+    JOIN Customer C ON I.CustomerID = C.CustomerID
+    JOIN Employee E ON I.EmployeeID = E.EmployeeID
+    WHERE I.InvoiceID = @InvoiceID;
+END;
+GO
+
+/*============================================================
+  Tên: usp_Manager_GetBranchPerformance
+  Chức năng: Thống kê doanh thu và lượt khách của 1 chi nhánh
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Manager_GetBranchPerformance
+    @BranchID INT,
+    @FromDate DATE,
+    @ToDate DATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1. Tổng doanh thu chia theo loại (Sản phẩm / Dịch vụ)
+    SELECT 
+        II.ItemType,
+        SUM(II.TotalPrice) AS Revenue,
+        COUNT(DISTINCT I.InvoiceID) AS TotalInvoices
+    FROM Invoice I
+    JOIN InvoiceItem II ON I.InvoiceID = II.InvoiceID
+    WHERE I.BranchID = @BranchID 
+      AND CAST(I.InvoiceDate AS DATE) BETWEEN @FromDate AND @ToDate
+      AND I.Status = N'Paid'
+    GROUP BY II.ItemType;
+
+    -- 2. Tổng số lượt khám bệnh (Visit counts)
+    SELECT COUNT(*) AS TotalVisits
+    FROM CheckHealth CH
+    JOIN Employee E ON CH.DoctorID = E.EmployeeID
+    WHERE E.BranchID = @BranchID
+      AND CAST(CH.CheckDate AS DATE) BETWEEN @FromDate AND @ToDate;
+END;
+GO
+
+/*============================================================
+  Tên: usp_Manager_GetDoctorEfficiency
+  Chức năng: Đánh giá hiệu suất bác sĩ tại chi nhánh
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Manager_GetDoctorEfficiency
+    @BranchID INT
+AS
+BEGIN
+    SELECT 
+        E.FullName AS DoctorName,
+        COUNT(CH.CheckID) AS TotalTreatments,
+        (SELECT SUM(I.FinalAmount) 
+         FROM Invoice I 
+         WHERE I.EmployeeID = E.EmployeeID AND I.Status = N'Paid') AS TotalRevenueGenerated
+    FROM Employee E
+    LEFT JOIN CheckHealth CH ON E.EmployeeID = CH.DoctorID
+    WHERE E.BranchID = @BranchID AND E.PositionID = 1 -- PositionID 1: Bác sĩ
+    GROUP BY E.EmployeeID, E.FullName
+    ORDER BY TotalTreatments DESC;
+END;
+GO
+
+/*============================================================
+  Tên: usp_BranchManager_MonthlyDetailedRevenue
+  Chức năng: Báo cáo doanh thu chi tiết theo loại hình tại chi nhánh
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_BranchManager_MonthlyDetailedRevenue
+    @BranchID INT,
+    @Month INT,
+    @Year INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+        II.ItemType AS [Loại hình],
+        SUM(II.TotalPrice) AS [Tổng doanh thu],
+        COUNT(II.InvoiceItemID) AS [Số lượng bán ra]
+    FROM Invoice I
+    JOIN InvoiceItem II ON I.InvoiceID = II.InvoiceID
+    WHERE I.BranchID = @BranchID 
+      AND MONTH(I.InvoiceDate) = @Month 
+      AND YEAR(I.InvoiceDate) = @Year
+    GROUP BY II.ItemType;
+END;
+GO
+
+/*============================================================
+  Tên: usp_BranchManager_ReviewSummary
+  Chức năng: Thống kê điểm đánh giá trung bình tại chi nhánh
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_BranchManager_ReviewSummary
+    @BranchID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+        AVG(CAST(RatingServiceQuality AS FLOAT)) AS [Điểm dịch vụ trung bình],
+        AVG(CAST(RatingStaffAttitude AS FLOAT)) AS [Điểm thái độ trung bình],
+        AVG(CAST(RatingOverall AS FLOAT)) AS [Điểm tổng thể trung bình],
+        COUNT(ReviewID) AS [Tổng số lượt đánh giá]
+    FROM Review
+    WHERE BranchID = @BranchID;
+
+    -- Hiển thị các bình luận tiêu cực (dưới 3 sao) để xử lý
+    SELECT CustomerID, RatingOverall, Comment, CreatedAt
+    FROM Review
+    WHERE BranchID = @BranchID AND RatingOverall <= 3
+    ORDER BY CreatedAt DESC;
+END;
+GO
+
+/*============================================================
+  Tên: usp_BranchManager_TopCustomers
+  Chức năng: Lấy danh sách khách hàng VIP của chi nhánh
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_BranchManager_TopCustomers
+    @BranchID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT TOP 10
+        C.FullName AS [Tên khách hàng],
+        C.Phone AS [Số điện thoại],
+        SUM(I.FinalAmount) AS [Tổng chi tiêu tại chi nhánh],
+        MT.Name AS [Hạng thành viên]
+    FROM Customer C
+    JOIN Invoice I ON C.CustomerID = I.CustomerID
+    JOIN MembershipTier MT ON C.MembershipTierID = MT.MembershipTierID
+    WHERE I.BranchID = @BranchID
+    GROUP BY C.CustomerID, C.FullName, C.Phone, MT.Name
+    ORDER BY [Tổng chi tiêu tại chi nhánh] DESC;
+END;
+GO
+
+/*============================================================
+  Tên: usp_Admin_GlobalRevenueDashboard
+  Chức năng: So sánh doanh thu giữa các chi nhánh
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Admin_GlobalRevenueDashboard
+    @Year INT
+AS
+BEGIN
+    SELECT 
+        B.Name AS BranchName,
+        SUM(I.FinalAmount) AS YearlyRevenue,
+        COUNT(I.InvoiceID) AS TotalTransactions
+    FROM Branch B
+    LEFT JOIN Invoice I ON B.BranchID = I.BranchID
+    WHERE YEAR(I.InvoiceDate) = @Year AND I.Status = N'Paid'
+    GROUP BY B.BranchID, B.Name
+    ORDER BY YearlyRevenue DESC;
+END;
+GO
+
+/*============================================================
+  Tên: usp_Admin_TransferEmployee
+  Chức năng: Điều động nhân viên sang chi nhánh mới
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Admin_TransferEmployee
+    @EmployeeID INT,
+    @NewBranchID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- 1. Cập nhật ngày kết thúc tại chi nhánh cũ trong lịch sử
+        UPDATE EmployeeHistory 
+        SET EndDate = GETDATE()
+        WHERE EmployeeID = @EmployeeID AND EndDate IS NULL;
+
+        -- 2. Cập nhật chi nhánh mới trong bảng Employee
+        UPDATE Employee 
+        SET BranchID = @NewBranchID 
+        WHERE EmployeeID = @EmployeeID;
+
+        -- 3. Thêm bản ghi mới vào lịch sử
+        INSERT INTO EmployeeHistory (EmployeeID, BranchID, StartDate)
+        VALUES (@EmployeeID, @NewBranchID, GETDATE());
+
+        COMMIT TRANSACTION;
+        PRINT N'Điều động nhân viên thành công.';
+    END TRY
+    BEGIN CATCH
+        ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+
+/*============================================================
+  Tên: usp_Admin_UpdateMembershipPolicy
+  Chức năng: Admin điều chỉnh các mốc chi tiêu để phù hợp với chiến lược kinh doanh từng thời kỳ
+============================================================*/
+CREATE OR ALTER PROCEDURE usp_Admin_UpdateMembershipPolicy
+    @TierID INT,
+    @NewMinSpend DECIMAL(14,2),
+    @NewBenefits NVARCHAR(255)
+AS
+BEGIN
+    UPDATE MembershipTier
+    SET MinSpend = @NewMinSpend,
+        Benefits = @NewBenefits
+    WHERE MembershipTierID = @TierID;
 END;
 GO
 

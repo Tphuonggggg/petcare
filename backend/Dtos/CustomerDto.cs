@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -8,7 +9,8 @@ namespace PetCareX.Api.Dtos;
 public class CustomerDto
 {
     /// <summary>Primary key.</summary>
-    public int CustomerId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? CustomerId { get; set; }
 
     /// <summary>Full name of the customer.</summary>
     [Required]
@@ -46,8 +48,9 @@ public class CustomerDto
     public DateOnly? MemberSince { get; set; }
 
     /// <summary>Gender (optional).</summary>
-    /// <summary>Gender.</summary>
-    [Required]
     [StringLength(1)]
-    public string Gender { get; set; } = null!;
+    public string? Gender { get; set; }
+
+    /// <summary>Pets belonging to this customer.</summary>
+    public List<PetDto> Pets { get; set; } = new();
 }

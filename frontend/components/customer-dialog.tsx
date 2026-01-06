@@ -16,7 +16,9 @@ interface CustomerDialogProps {
 }
 
 export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
-  const [tiers, setTiers] = useState<{ membershipTierId: number; name: string }[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [tiers, setTiers] = useState<Array<{ membershipTierId: number; name: string }>>([])
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -31,14 +33,19 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
     ;(async () => {
       try {
         const { apiGet } = await import('@/lib/api')
-        const data = await apiGet('/membershiptiers')
-        if (mounted && Array.isArray(data)) {
-          const list = data.map((t: any) => ({ membershipTierId: t.membershipTierId ?? t.membershipTierId ?? t.id, name: t.name ?? t.Name ?? t.Name }))
-          setTiers(list)
-          if (list.length > 0 && !formData.membershipTierId) setFormData(s => ({ ...s, membershipTierId: list[0].membershipTierId }))
+        const data = await apiGet('/membershiptiers?pageSize=100')
+        if (mounted) {
+          let tiersList = []
+          if (data?.items && Array.isArray(data.items)) {
+            tiersList = data.items.map((t: any) => ({ membershipTierId: t.membershipTierId || t.id, name: t.name }))
+          } else if (Array.isArray(data)) {
+            tiersList = data.map((t: any) => ({ membershipTierId: t.membershipTierId || t.id, name: t.name }))
+          }
+          setTiers(tiersList)
+          if (tiersList.length > 0) setFormData(s => ({ ...s, membershipTierId: tiersList[0].membershipTierId }))
         }
-      } catch {
-        // ignore, keep defaults
+      } catch (error) {
+        console.error('Failed to load tiers:', error)
       }
     })()
     return () => { mounted = false }
@@ -46,22 +53,42 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
+    
+    // Validation
+    if (!formData.name.trim()) {
+      setError('Vui lòng nhập họ tên')
+      return
+    }
+    if (!formData.phone.trim()) {
+      setError('Vui lòng nhập số điện thoại')
+      return
+    }
+    if (!formData.email.trim()) {
+      setError('Vui lòng nhập email')
+      return
+    }
+
     ;(async () => {
       try {
+        setLoading(true)
         const payload = {
-          fullName: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          address: formData.address,
+          fullName: formData.name.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
+          address: formData.address?.trim() || '',
           gender: formData.gender,
           membershipTierId: formData.membershipTierId || undefined,
         }
         const created = await apiPost('/customers', payload)
         try { window.dispatchEvent(new CustomEvent('customer-added', { detail: created })) } catch {}
+        setFormData({ name: "", email: "", phone: "", address: "", membershipTierId: tiers.length > 0 ? tiers[0].membershipTierId : 0, gender: "M" })
         onOpenChange(false)
       } catch (err: any) {
         console.error('Create customer failed', err)
-        alert('Tạo khách hàng thất bại: ' + (err?.message || err))
+        setError(err?.message || 'Tạo khách hàng thất bại')
+      } finally {
+        setLoading(false)
       }
     })()
   }
@@ -74,6 +101,11 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
           <DialogDescription>Nhập thông tin khách hàng vào form bên dưới</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+              {error}
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="name">Họ tên</Label>
             <Input
@@ -147,11 +179,21 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
             </Select>
           </div>
           <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => onOpenChange(false)} 
+              className="flex-1"
+              disabled={loading}
+            >
               Hủy
             </Button>
-            <Button type="submit" className="flex-1">
-              Lưu
+            <Button 
+              type="submit" 
+              className="flex-1"
+              disabled={loading}
+            >
+              {loading ? 'Đang lưu...' : 'Lưu'}
             </Button>
           </div>
         </form>

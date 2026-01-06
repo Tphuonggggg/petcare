@@ -14,6 +14,9 @@ builder.Services.AddSwaggerGen(options =>
 {
     var xmlFile = System.IO.Path.ChangeExtension(System.Reflection.Assembly.GetEntryAssembly()?.Location, ".xml");
     if (System.IO.File.Exists(xmlFile)) options.IncludeXmlComments(xmlFile);
+    
+    // Configure Swagger to respect JsonIgnore attributes
+    options.SchemaFilter<SwaggerIgnoreFilter>();
 });
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -21,6 +24,9 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // AutoMapper
 builder.Services.AddAutoMapper(typeof(PetCareX.Api.Mapping.MappingProfile));
+
+// Register Stored Procedure Service
+builder.Services.AddScoped<PetCareX.Api.Services.IStoredProcedureService, PetCareX.Api.Services.StoredProcedureService>();
 
 builder.Services.AddCors(options =>
 {
@@ -78,7 +84,11 @@ catch (Exception ex)
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseHttpsRedirection();
+// Only redirect to HTTPS in production
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // Enable CORS for browser-based requests (uses the default policy configured above)
 app.UseCors();
@@ -97,4 +107,46 @@ catch (Exception ex)
     // Ensure any startup exceptions are visible in console logs
     Console.WriteLine("Unhandled exception during host run: " + ex);
     throw;
+}
+
+/// <summary>
+/// Schema filter to exclude properties with JsonIgnore attribute from Swagger schema.
+/// </summary>
+public class SwaggerIgnoreFilter : Swashbuckle.AspNetCore.SwaggerGen.ISchemaFilter
+{
+    /// <summary>
+    /// Applies the filter to remove JsonIgnore properties.
+    /// </summary>
+    public void Apply(Microsoft.OpenApi.Models.OpenApiSchema schema, Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext context)
+    {
+        if (schema?.Properties == null || context.Type == null)
+            return;
+
+        var excludedProperties = context.Type.GetProperties()
+            .Where(t =>
+                t.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), true).Any())
+            .Select(d => d.Name.ToCamelCase());
+
+        foreach (var excludedProperty in excludedProperties)
+        {
+            if (schema.Properties.ContainsKey(excludedProperty))
+                schema.Properties.Remove(excludedProperty);
+        }
+    }
+}
+
+/// <summary>
+/// String extension methods.
+/// </summary>
+public static class StringExtensions
+{
+    /// <summary>
+    /// Converts a string to camelCase.
+    /// </summary>
+    public static string ToCamelCase(this string str)
+    {
+        if (string.IsNullOrEmpty(str) || char.IsLower(str[0]))
+            return str;
+        return char.ToLower(str[0]) + str.Substring(1);
+    }
 }

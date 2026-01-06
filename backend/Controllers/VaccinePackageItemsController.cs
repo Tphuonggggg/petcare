@@ -29,20 +29,25 @@ public class VaccinePackageItemsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns all vaccine package items.
+    /// Returns paginated vaccine package items.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<VaccinePackageItemDto>>> Get()
+    public async Task<ActionResult<PaginatedResult<VaccinePackageItemDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var list = await _context.VaccinePackageItems.ToListAsync();
-        return _mapper.Map<List<VaccinePackageItemDto>>(list);
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.VaccinePackageItems.AsQueryable();
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var dtos = _mapper.Map<List<VaccinePackageItemDto>>(items);
+        return new PaginatedResult<VaccinePackageItemDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>
     /// Gets a vaccine package item by composite id.
     /// </summary>
     [HttpGet("{packageId}/{vaccineId}")]
-    public async Task<ActionResult<VaccinePackageItemDto>> Get(int packageId, int vaccineId)
+    public async Task<ActionResult<VaccinePackageItemDto>> GetById(int packageId, int vaccineId)
     {
         var e = await _context.VaccinePackageItems.FindAsync(packageId, vaccineId);
         if (e == null) return NotFound();
@@ -59,7 +64,7 @@ public class VaccinePackageItemsController : ControllerBase
         _context.VaccinePackageItems.Add(entity);
         await _context.SaveChangesAsync();
         var result = _mapper.Map<VaccinePackageItemDto>(entity);
-        return CreatedAtAction(nameof(Get), new { packageId = entity.PackageId, vaccineId = entity.VaccineId }, result);
+        return CreatedAtAction(nameof(GetById), new { packageId = entity.PackageId, vaccineId = entity.VaccineId }, result);
     }
 
     /// <summary>

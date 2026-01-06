@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -8,7 +9,8 @@ namespace PetCareX.Api.Dtos;
 public class ServiceDto
 {
     /// <summary>Service primary key.</summary>
-    public int ServiceId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? ServiceId { get; set; }
 
     /// <summary>Name of the service.</summary>
     [Required]

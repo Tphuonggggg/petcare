@@ -27,7 +27,7 @@ public partial class Customer
     public string Cccd { get; set; } = null!;
 
     /// <summary>Gender.</summary>
-    public string Gender { get; set; } = null!;
+    public string? Gender { get; set; }
 
     /// <summary>Birth date.</summary>
     public DateOnly BirthDate { get; set; }

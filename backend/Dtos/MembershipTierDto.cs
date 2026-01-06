@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -8,7 +9,8 @@ namespace PetCareX.Api.Dtos;
 public class MembershipTierDto
 {
     /// <summary>Tier primary key.</summary>
-    public int MembershipTierId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? MembershipTierId { get; set; }
 
     /// <summary>Name of the tier.</summary>
     [Required]

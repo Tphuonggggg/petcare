@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -9,7 +10,8 @@ namespace PetCareX.Api.Dtos;
 public class CheckHealthDto
 {
     /// <summary>Health check primary key.</summary>
-    public int CheckId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? CheckId { get; set; }
 
     /// <summary>Related pet primary key.</summary>
     [Required]

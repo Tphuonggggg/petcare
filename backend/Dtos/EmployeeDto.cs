@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PetCareX.Api.Dtos;
 
@@ -9,7 +10,8 @@ namespace PetCareX.Api.Dtos;
 public class EmployeeDto
 {
     /// <summary>Employee primary key.</summary>
-    public int EmployeeId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? EmployeeId { get; set; }
 
     /// <summary>Branch id where the employee works (optional).</summary>
     public int? BranchId { get; set; }
