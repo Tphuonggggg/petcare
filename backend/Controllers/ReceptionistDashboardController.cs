@@ -118,6 +118,8 @@ public class ReceptionistDashboardController : ControllerBase
             .Select(b => new WaitingCustomerDto
             {
                 BookingId = b.BookingId,
+                PetId = b.Pet.PetId,
+                CustomerId = b.Customer.CustomerId,
                 CustomerName = b.Customer.FullName,
                 PetName = b.Pet.Name,
                 BookingTime = b.RequestedDateTime,
@@ -175,29 +177,25 @@ public class ReceptionistDashboardController : ControllerBase
             return NotFound(new { message = "Không tìm thấy lịch hẹn" });
         }
 
-        booking.Status = request.NewStatus;
-        
-        if (!string.IsNullOrEmpty(request.Notes))
-        {
-            booking.Notes = request.Notes;
-        }
-
-        // Tạo lịch sử thay đổi
-        var history = new Models.BookingHistory
-        {
-            BookingId = bookingId,
-            OldStatus = request.OldStatus ?? booking.Status,
-            NewStatus = request.NewStatus,
-            ActionType = "StatusChanged",
-            Timestamp = DateTime.Now,
-            Notes = request.Reason
-        };
-
-        _context.BookingHistories.Add(history);
-
         try
         {
-            await _context.SaveChangesAsync();
+            // Use raw SQL to bypass trigger OUTPUT clause issue
+            var oldStatus = booking.Status;
+            
+            // Update Booking
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE Booking 
+                SET Status = {request.NewStatus},
+                    Notes = {request.Notes}
+                WHERE BookingId = {bookingId}
+            ");
+            
+            // Insert BookingHistory
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO BookingHistory (BookingId, OldStatus, NewStatus, ActionType, Timestamp, Notes)
+                VALUES ({bookingId}, {oldStatus}, {request.NewStatus}, 'StatusChanged', GETDATE(), {request.Reason})
+            ");
+            
             return Ok(new { message = "Cập nhật trạng thái thành công", bookingId = bookingId });
         }
         catch (Exception ex)
@@ -215,36 +213,31 @@ public class ReceptionistDashboardController : ControllerBase
     [HttpPost("check-in/{bookingId}")]
     public async Task<IActionResult> CheckIn(int bookingId, [FromBody] CheckInDto request)
     {
-        var booking = await _context.Bookings.FindAsync(bookingId);
-        if (booking == null)
-        {
-            return NotFound(new { message = "Không tìm thấy lịch hẹn" });
-        }
-
-        var oldStatus = booking.Status;
-        booking.Status = "Confirmed";
-        
-        // Tạo lịch sử check-in
-        var history = new Models.BookingHistory
-        {
-            BookingId = bookingId,
-            OldStatus = oldStatus,
-            NewStatus = "Confirmed",
-            ActionType = "CheckIn",
-            Timestamp = DateTime.Now,
-            Notes = $"Check-in bởi nhân viên ID: {request.EmployeeId}"
-        };
-
-        _context.BookingHistories.Add(history);
-
         try
         {
+            // Dùng raw SQL để bypass trigger issue với OUTPUT clause
+            await _context.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE [dbo].[Booking] SET [Status] = 'Confirmed' WHERE [BookingID] = {bookingId}"
+            );
+            
+            // Tạo lịch sử check-in
+            var history = new Models.BookingHistory
+            {
+                BookingId = bookingId,
+                OldStatus = "Pending",
+                NewStatus = "Confirmed",
+                ActionType = "CheckIn",
+                Timestamp = DateTime.Now,
+                Notes = $"Check-in bởi nhân viên ID: {request.EmployeeId}"
+            };
+
+            _context.BookingHistories.Add(history);
             await _context.SaveChangesAsync();
+            
             return Ok(new { message = "Check-in thành công", bookingId = bookingId });
         }
         catch (Exception ex)
         {
-            // Log full exception for debugging
             Console.WriteLine($"Check-in error: {ex.Message}");
             Console.WriteLine($"Inner exception: {ex.InnerException?.Message}");
             return BadRequest(new { message = "Lỗi khi check-in", error = ex.InnerException?.Message ?? ex.Message });
@@ -473,6 +466,10 @@ public class WaitingCustomerDto
 {
     /// <summary>Booking ID</summary>
     public int BookingId { get; set; }
+    /// <summary>Pet ID</summary>
+    public int PetId { get; set; }
+    /// <summary>Customer ID</summary>
+    public int CustomerId { get; set; }
     /// <summary>Customer name</summary>
     public string CustomerName { get; set; } = string.Empty;
     /// <summary>Pet name</summary>

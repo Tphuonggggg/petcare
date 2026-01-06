@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PetCareX.Api.Models;
 
@@ -35,9 +36,11 @@ public partial class Product
     /// <summary>Invoice items referencing this product.</summary>
     public virtual ICollection<InvoiceItem> InvoiceItems { get; set; } = new List<InvoiceItem>();
     
-    /// <summary>Branch owning this product.</summary>
-    public int BranchId { get; set; }
+    /// <summary>Branch owning this product (not mapped to database).</summary>
+    [NotMapped]
+    public int? BranchId { get; set; }
 
-    /// <summary>Navigation to branch.</summary>
-    public virtual Branch Branch { get; set; } = null!;
+    /// <summary>Navigation to branch (not mapped).</summary>
+    [NotMapped]
+    public virtual Branch? Branch { get; set; }
 }

@@ -21,12 +21,19 @@ interface InvoiceDetail {
   customerId: number
   customerName: string
   customerPhone?: string
+  branchId?: number
+  branchName?: string
+  employeeId?: number
+  employeeName?: string
   invoiceDate: string
   status: string
   totalAmount: number
   discountAmount?: number
+  finalAmount?: number
+  paymentMethod?: string
   notes?: string
-  items: InvoiceItem[]
+  items?: any[]
+  invoiceItems?: any[]
 }
 
 export default function InvoiceDetailPage() {
@@ -241,6 +248,18 @@ export default function InvoiceDetailPage() {
                   {invoice.status === "Paid" ? "Đã thanh toán" : "Chưa thanh toán"}
                 </span>
               </div>
+              {invoice.branchName && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Chi nhánh</p>
+                  <p className="font-medium">{invoice.branchName}</p>
+                </div>
+              )}
+              {invoice.paymentMethod && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Phương thức thanh toán</p>
+                  <p className="font-medium">{invoice.paymentMethod}</p>
+                </div>
+              )}
             </div>
 
             {/* Items Table */}
@@ -254,7 +273,7 @@ export default function InvoiceDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {invoice.items.map((item) => (
+                {(invoice.items || invoice.invoiceItems || []).map((item) => (
                   <tr key={item.itemId} className="border-b">
                     <td className="py-2">{item.description}</td>
                     <td className="text-center">{item.quantity}</td>
@@ -268,15 +287,19 @@ export default function InvoiceDetailPage() {
             {/* Totals */}
             <div className="flex justify-end">
               <div className="w-64 space-y-2 border-t pt-4">
+                <div className="flex justify-between">
+                  <span>Tổng tiền:</span>
+                  <span>{invoice.totalAmount.toLocaleString("vi-VN")} ₫</span>
+                </div>
                 {invoice.discountAmount && invoice.discountAmount > 0 && (
-                  <div className="flex justify-between">
+                  <div className="flex justify-between text-orange-600">
                     <span>Giảm giá:</span>
-                    <span>{invoice.discountAmount.toLocaleString("vi-VN")} ₫</span>
+                    <span>-{invoice.discountAmount.toLocaleString("vi-VN")} ₫</span>
                   </div>
                 )}
-                <div className="flex justify-between text-lg font-bold border-t pt-2">
-                  <span>Tổng cộng:</span>
-                  <span>{invoice.totalAmount.toLocaleString("vi-VN")} ₫</span>
+                <div className="flex justify-between text-lg font-bold border-t pt-2 text-green-600">
+                  <span>Thành tiền:</span>
+                  <span>{(invoice.finalAmount || invoice.totalAmount - (invoice.discountAmount || 0)).toLocaleString("vi-VN")} ₫</span>
                 </div>
               </div>
             </div>

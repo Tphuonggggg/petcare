@@ -9,6 +9,8 @@ import { apiGet, apiPost } from "@/lib/api"
 
 interface WaitingCustomer {
   bookingId: number
+  petId: number
+  customerId: number
   customerName: string
   petName: string
   bookingTime: string
@@ -28,7 +30,8 @@ export default function CheckInPage() {
   const loadWaitingCustomers = async () => {
     try {
       setLoading(true)
-      const data = await apiGet("/ReceptionistDashboard/waiting-customers")
+      const branchId = localStorage.getItem('branchId') || '1'
+      const data = await apiGet(`/ReceptionistDashboard/waiting-customers?branchId=${branchId}`)
       setWaitingCustomers(data || [])
     } catch (error) {
       console.error("Error loading waiting customers:", error)
@@ -37,15 +40,28 @@ export default function CheckInPage() {
     }
   }
 
-  const handleCheckIn = async (bookingId: number) => {
+  const handleCheckIn = async (customer: WaitingCustomer) => {
     try {
-      const employeeId = 1 // TODO: Get from auth context
+      const doctorId = parseInt(localStorage.getItem('employeeId') || '1')
+      const petId = customer.petId
+      const employeeId = doctorId
+      
+      console.log('Check-in data:', { petId, doctorId, customer })
+      
+      // Tạo hồ sơ check-up
       await apiPost(`/CheckHealths`, {
-        bookingId,
-        employeeId,
-        checkInTime: new Date().toISOString(),
+        petId: petId,
+        doctorId: doctorId,
+        checkDate: new Date().toISOString().split('T')[0],
+        symptoms: '',
       })
-      alert(`Đã check-in khách hàng - Booking #${bookingId}`)
+      
+      // Cập nhật booking status - dùng check-in endpoint
+      await apiPost(`/ReceptionistDashboard/check-in/${customer.bookingId}`, {
+        employeeId: employeeId
+      })
+      
+      alert(`Đã check-in khách hàng ${customer.customerName}`)
       loadWaitingCustomers()
     } catch (error) {
       console.error("Error checking in:", error)
@@ -112,7 +128,7 @@ export default function CheckInPage() {
                       </div>
                     </div>
                     <Button
-                      onClick={() => handleCheckIn(customer.bookingId)}
+                      onClick={() => handleCheckIn(customer)}
                       className="gap-2"
                     >
                       <Clock className="h-4 w-4" />

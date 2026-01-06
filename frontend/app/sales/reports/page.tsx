@@ -3,169 +3,336 @@
 import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PawPrint, ArrowLeft, Download, RefreshCw, TrendingUp, Calendar } from "lucide-react"
 import { format } from "date-fns"
+import { apiGet } from '@/lib/api'
+import { useRouter } from "next/navigation"
 
-type Invoice = { invoiceId: number; amount: number; issuedAt: string; customerId?: number; branchId?: number }
-type Booking = { bookingId: number; date: string; total?: number; branchId?: number }
+interface SalesData {
+  totalRevenue: number
+  totalOrders: number
+  todayRevenue: number
+  last7Days: { date: string; revenue: number; orders: number }[]
+  recentInvoices: any[]
+}
 
 export default function SalesReportsPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [bookings, setBookings] = useState<Booking[]>([])
-  const [loading, setLoading] = useState(false)
-  const [branchName, setBranchName] = useState<string | null>(null)
+  const router = useRouter()
+  const [data, setData] = useState<SalesData>({
+    totalRevenue: 0,
+    totalOrders: 0,
+    todayRevenue: 0,
+    last7Days: [],
+    recentInvoices: []
+  })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [branchId, setBranchId] = useState<number | null>(null)
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      try {
-        const { apiGet } = await import('@/lib/api')
-
-        // Determine branch: prefer employee's assigned branch for sales role
-        let branchId: string | null = null
-        try {
-          const raw = localStorage.getItem('user')
-          if (raw) {
-            const user = JSON.parse(raw)
-            if (user?.role === 'sales' && user?.email) {
-              try {
-                const emp = await apiGet('/employees?email=' + encodeURIComponent(user.email))
-                if (emp && (emp as any).branchId) {
-                  branchId = String((emp as any).branchId)
-                  try {
-                    const b = await apiGet('/branches/' + branchId)
-                    setBranchName(b?.name ?? null)
-                  } catch {}
-                }
-              } catch {}
-            }
-          }
-        } catch {}
-
-        // fallback to selected_branch_id in localStorage
-        if (!branchId) branchId = localStorage.getItem('selected_branch_id')
-
-        const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : ''
-        const inv = await apiGet('/invoices' + q)
-        const bk = await apiGet('/bookings' + q)
-        setInvoices(Array.isArray(inv) ? inv : [])
-        setBookings(Array.isArray(bk) ? bk : [])
-      } catch (err) {
-        setInvoices([])
-        setBookings([])
-      } finally { setLoading(false) }
+    // Get branchId from localStorage
+    const stored = localStorage.getItem('branchId')
+    if (stored) {
+      setBranchId(parseInt(stored))
     }
-    load()
   }, [])
 
-  const totalRevenue = useMemo(() => invoices.reduce((s, i) => s + (i.amount||0), 0), [invoices])
-  const totalBookings = useMemo(() => bookings.length, [bookings])
-
-  const last7Days = useMemo(() => {
-    const days: { date: string; revenue: number; bookings: number }[] = []
-    for (let i=6;i>=0;i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-      const key = format(d, 'yyyy-MM-dd')
-      const rev = invoices.filter(inv => (inv.issuedAt||'').slice(0,10) === key).reduce((s,i)=>s+(i.amount||0),0)
-      const bcount = bookings.filter(b => (b.date||'').slice(0,10) === key).length
-      days.push({ date: key, revenue: rev, bookings: bcount })
+  useEffect(() => {
+    if (branchId) {
+      loadSalesData()
     }
-    return days
-  }, [invoices, bookings])
+  }, [branchId])
 
-  function exportCsv() {
-    const rows = [['invoiceId','amount','issuedAt','customerId']]
-    invoices.forEach(i => rows.push([String(i.invoiceId), String(i.amount), i.issuedAt, String(i.customerId||'')]))
-    const csv = rows.map(r => r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n')
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+  const loadSalesData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      // Get sales dashboard data
+      const dashboardData = await apiGet(`/SalesDashboard/summary?branchId=${branchId}`)
+      
+      // Get ALL invoices for today to calculate accurate revenue
+      // Use local timezone instead of UTC
+      const now = new Date()
+      const today = now.getFullYear() + '-' + 
+        String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(now.getDate()).padStart(2, '0')
+      
+      
+      // Get invoices filtered by current branch
+      const allInvoicesData = await apiGet(`/invoices?page=1&pageSize=2000&branchId=${branchId}`)
+      const allInvoices = allInvoicesData.items || allInvoicesData || []
+      
+      // Get recent invoices for display
+      const recentInvoicesData = await apiGet(`/invoices?page=1&pageSize=10&branchId=${branchId}`)
+      const recentInvoices = recentInvoicesData.items || recentInvoicesData || []
+
+      // Calculate total revenue from PROCESSING and COMPLETED invoices
+      const processedInvoices = allInvoices.filter((inv: any) => {
+        const status = inv.status?.toLowerCase()
+        return status === 'completed' || status === 'processing'
+      })
+      const totalRevenue = processedInvoices.reduce((sum: number, inv: any) => 
+        sum + (inv.finalAmount || 0), 0
+      )
+
+      // Calculate today's revenue - include today's orders (including Pending)
+      // Note: Status update from orders page may not be working properly
+      const todayInvoices = allInvoices.filter((inv: any) => {
+        const invoiceDate = inv.invoiceDate?.split('T')[0]
+        const isToday = invoiceDate === today
+        const status = inv.status?.toLowerCase()
+        const isValidForRevenue = status === 'completed' || status === 'processing' || 
+                                 (status === 'pending' && isToday) // Include today's pending orders
+        
+        return isToday && isValidForRevenue
+      })
+      
+      const todayRevenue = todayInvoices.reduce((sum: number, inv: any) => 
+        sum + (inv.finalAmount || 0), 0
+      )
+
+      // Calculate last 7 days data - only count COMPLETED orders  
+      const last7Days = []
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date()
+        date.setDate(date.getDate() - i)
+        const dateStr = date.toISOString().split('T')[0]
+        
+        const dayInvoices = allInvoices.filter((inv: any) => 
+          inv.invoiceDate?.split('T')[0] === dateStr &&
+          inv.status?.toLowerCase() === 'completed'
+        )
+        
+        const revenue = dayInvoices.reduce((sum: number, inv: any) => 
+          sum + (inv.finalAmount || 0), 0
+        )
+        
+        last7Days.push({
+          date: dateStr,
+          revenue,
+          orders: dayInvoices.length
+        })
+      }
+
+      setData({
+        totalRevenue: totalRevenue,
+        totalOrders: processedInvoices.length,
+        todayRevenue,
+        last7Days,
+        recentInvoices: recentInvoices.slice(0, 5) // Show only 5 recent
+      })
+    } catch (err) {
+      console.error("Error loading sales data:", err)
+      setError("Không thể tải dữ liệu báo cáo")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const exportCsv = () => {
+    const rows = [['Mã hóa đơn', 'Khách hàng', 'Ngày', 'Tổng tiền', 'Trạng thái']]
+    data.recentInvoices.forEach(inv => {
+      rows.push([
+        String(inv.invoiceId || ''),
+        inv.customerName || 'N/A',
+        format(new Date(inv.invoiceDate || new Date()), 'dd/MM/yyyy'),
+        String(inv.finalAmount || 0),
+        inv.status || 'N/A'
+      ])
+    })
+    
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = `invoices_${format(new Date(),'yyyyMMdd')}.csv`
+    a.download = `bao-cao-doanh-thu-${format(new Date(), 'yyyy-MM-dd')}.csv`
     document.body.appendChild(a)
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
   }
 
+  if (!branchId) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Chưa chọn chi nhánh</p>
+          <Button onClick={() => router.push("/sales")} className="mt-4">
+            Quay lại
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-muted/30">
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">Báo cáo bán hàng</h1>
-          <p className="text-muted-foreground">Tổng quan doanh thu và lịch sử đơn hàng (lọc theo chi nhánh nếu có).</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Tổng doanh thu</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{totalRevenue.toLocaleString()} đ</div>
-              <div className="text-sm text-muted-foreground mt-2">Số hóa đơn: {invoices.length}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Tổng lượt</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{totalBookings}</div>
-              <div className="text-sm text-muted-foreground mt-2">Cuộc hẹn đã ghi</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Hành động</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-2">
-                <Button onClick={exportCsv}>Xuất CSV (hóa đơn)</Button>
-                <Button variant="outline" onClick={() => window.location.reload()}>Làm mới</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Doanh thu 7 ngày gần nhất</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
-              {last7Days.map(d => (
-                <div key={d.date} className="p-3 border rounded text-center">
-                  <div className="text-sm text-muted-foreground">{format(new Date(d.date),'dd/MM')}</div>
-                  <div className="font-medium">{d.revenue.toLocaleString()} đ</div>
-                  <div className="text-xs text-muted-foreground">{d.bookings} lượt</div>
-                </div>
-              ))}
+      <header className="border-b bg-background">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => router.push("/sales")}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center gap-2">
+              <PawPrint className="h-6 w-6 text-primary" />
+              <span className="font-bold">PetCare - Báo cáo bán hàng</span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <Button variant="outline" onClick={() => { import('@/lib/auth').then(m => m.logout('/')) }}>
+            Đăng xuất
+          </Button>
+        </div>
+      </header>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Hóa đơn gần đây</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? <div>Đang tải...</div> : (
-              <div className="space-y-2">
-                {invoices.slice().reverse().map(inv => (
-                  <div key={inv.invoiceId} className="p-2 border rounded flex justify-between items-center">
-                    <div>
-                      <div className="font-medium">HĐ #{inv.invoiceId} — {format(new Date(inv.issuedAt),'dd/MM/yyyy')}</div>
-                      <div className="text-sm text-muted-foreground">Khách hàng: {inv.customerId ?? '-'}</div>
-                    </div>
-                    <div className="font-medium">{inv.amount?.toLocaleString() ?? 0} đ</div>
+      <main className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Báo cáo bán hàng</h1>
+            <p className="text-muted-foreground">
+              Tổng quan doanh thu và lịch sử đơn hàng (lọc theo chi nhánh nếu có).
+            </p>
+          </div>
+          <Button onClick={loadSalesData} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Làm mới
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">Đang tải dữ liệu báo cáo...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-8">
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button onClick={loadSalesData}>Thử lại</Button>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Tổng doanh thu</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{data.totalRevenue.toLocaleString()} đ</div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Số đơn đã xử lý: {data.totalOrders}
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Doanh thu hôm nay</CardTitle>
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{data.todayRevenue.toLocaleString()} đ</div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    {format(new Date(), 'dd/MM/yyyy')} • Bao gồm đơn hôm nay
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Hành động</CardTitle>
+                  <Download className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={exportCsv} 
+                      className="w-full"
+                      disabled={data.recentInvoices.length === 0}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Xuất CSV (hóa đơn)
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => router.push("/sales/orders/new")}
+                      className="w-full"
+                    >
+                      Tạo đơn hàng
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Hóa đơn gần đây</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadSalesData}
+                  disabled={loading}
+                  className="ml-2"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                  Làm mới
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="text-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
+                    <p className="text-muted-foreground">Đang tải dữ liệu...</p>
+                  </div>
+                ) : data.recentInvoices.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">Chưa có hóa đơn nào</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {data.recentInvoices.map(invoice => (
+                      <div 
+                        key={invoice.invoiceId} 
+                        className="flex justify-between items-center p-4 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                        onClick={() => router.push(`/sales/orders/${invoice.invoiceId}`)}
+                      >
+                        <div>
+                          <div className="font-medium">
+                            Hóa đơn #{invoice.invoiceId}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {invoice.customerName || 'Khách lẻ'} • {' '}
+                            {format(new Date(invoice.invoiceDate || new Date()), 'dd/MM/yyyy HH:mm')}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              invoice.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                              invoice.status === 'Processing' ? 'bg-blue-100 text-blue-800' :
+                              invoice.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {invoice.status === 'Pending' ? 'Chờ xử lý' : 
+                               invoice.status === 'Processing' ? 'Đang xử lý' :
+                               invoice.status === 'Completed' ? 'Hoàn thành' : invoice.status}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-primary">
+                            {(invoice.finalAmount || 0).toLocaleString()} đ
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {invoice.paymentMethod || 'CASH'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
       </main>
     </div>
   )

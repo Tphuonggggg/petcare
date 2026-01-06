@@ -21,7 +21,7 @@ public class CheckHealthDto
     public int? DoctorId { get; set; }
 
     /// <summary>Date of the check (optional).</summary>
-    public DateOnly? CheckDate { get; set; }
+    public DateTime? CheckDate { get; set; }
 
     /// <summary>Reported symptoms (optional).</summary>
     [StringLength(1000)]
@@ -36,5 +36,5 @@ public class CheckHealthDto
     public string? Prescription { get; set; }
 
     /// <summary>Follow-up date (optional).</summary>
-    public DateOnly? FollowUpDate { get; set; }
+    public DateTime? FollowUpDate { get; set; }
 }

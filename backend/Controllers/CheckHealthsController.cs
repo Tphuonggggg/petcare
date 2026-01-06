@@ -54,6 +54,10 @@ public class CheckHealthsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<CheckHealthDto>> Post(CheckHealthDto dto)
     {
+        // Validate PetId exists
+        if (!await _context.Pets.AnyAsync(p => p.PetId == dto.PetId))
+            return BadRequest(new { error = $"Pet with ID {dto.PetId} not found" });
+
         var entity = _mapper.Map<CheckHealth>(dto);
         _context.CheckHealths.Add(entity);
         await _context.SaveChangesAsync();

@@ -38,4 +38,12 @@ public class InvoiceItemDto
     /// <summary>Total price for the line.</summary>
     [Range(0, double.MaxValue, ErrorMessage = "TotalPrice must be non-negative.")]
     public decimal? TotalPrice { get; set; }
+
+    /// <summary>Product name (if item is a product).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string? ProductName { get; set; }
+
+    /// <summary>Service name (if item is a service).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string? ServiceName { get; set; }
 }

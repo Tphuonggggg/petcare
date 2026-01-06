@@ -42,8 +42,10 @@ public class MappingProfile : Profile
             CreateMap<ServiceVaccination, ServiceVaccinationDto>();
             CreateMap<ServiceVaccinationDto, ServiceVaccination>();
 
-            CreateMap<Product, ProductDto>();
-            CreateMap<ProductDto, Product>();
+            CreateMap<Product, ProductDto>()
+                .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.StockQty));
+            CreateMap<ProductDto, Product>()
+                .ForMember(dest => dest.StockQty, opt => opt.MapFrom(src => src.Quantity ?? src.StockQty ?? 0));
 
             CreateMap<Position, PositionDto>();
             CreateMap<PositionDto, Position>();
@@ -69,10 +71,16 @@ public class MappingProfile : Profile
             CreateMap<LoyaltyTransaction, LoyaltyTransactionDto>();
             CreateMap<LoyaltyTransactionDto, LoyaltyTransaction>();
 
-            CreateMap<InvoiceItem, InvoiceItemDto>();
+            CreateMap<InvoiceItem, InvoiceItemDto>()
+                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : null))
+                .ForMember(dest => dest.ServiceName, opt => opt.MapFrom(src => src.Service != null ? src.Service.Name : null));
             CreateMap<InvoiceItemDto, InvoiceItem>();
 
-            CreateMap<Invoice, InvoiceDto>();
+            CreateMap<Invoice, InvoiceDto>()
+                .ForMember(dest => dest.BranchName, opt => opt.MapFrom(src => src.Branch != null ? src.Branch.Name : null))
+                .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.FullName : null))
+                .ForMember(dest => dest.CustomerPhone, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Phone : null))
+                .ForMember(dest => dest.Items, opt => opt.MapFrom(src => src.InvoiceItems));
             CreateMap<InvoiceDto, Invoice>();
 
             CreateMap<EmployeeHistory, EmployeeHistoryDto>();

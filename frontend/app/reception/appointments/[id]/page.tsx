@@ -90,7 +90,7 @@ export default function AppointmentDetailPage() {
 
   const handleStatusChange = async (status: string) => {
     try {
-      await apiPost(`/ReceptionistDashboard/update-booking-status/${id}`, {
+      await apiPut(`/ReceptionistDashboard/update-booking-status/${id}`, {
         newStatus: status,
       })
       alert("Cập nhật trạng thái thành công")
@@ -108,16 +108,17 @@ export default function AppointmentDetailPage() {
       if (!booking) return
 
       await apiPut(`/bookings/${id}`, {
-        bookingId: booking.bookingId,
-        customerId: 1, // TODO: Get from booking
-        petId: 1, // TODO: Get from booking
+        bookingId: parseInt(id as string),
+        customerId: booking.customerId,
+        petId: booking.petId,
         bookingType: booking.serviceType,
-        requestedDateTime: booking.bookingTime,
+        requestedDateTime: new Date(booking.bookingTime),
         status: booking.status,
         notes: notes,
       })
 
       alert("Lưu ghi chú thành công")
+      setNotes("") // Clear notes after save
       loadBookingDetail()
     } catch (error) {
       console.error("Error saving notes:", error)

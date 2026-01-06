@@ -38,6 +38,9 @@ public partial class Invoice
     /// <summary>Payment method used.</summary>
     public string PaymentMethod { get; set; } = null!;
 
+    /// <summary>Invoice status (Pending, Paid, Cancelled).</summary>
+    public string Status { get; set; } = "Pending";
+
     /// <summary>Navigation to the branch.</summary>
     public virtual Branch Branch { get; set; } = null!;
 

@@ -26,44 +26,59 @@ public class SalesDashboardController : ControllerBase
     }
 
     /// <summary>
-    /// Gets dashboard summary statistics for today by branch.
+    /// Gets dashboard summary statistics for today or a specified date range by branch.
     /// </summary>
     [HttpGet("summary")]
-    public async Task<ActionResult<DashboardSummaryDto>> GetDashboardSummary([FromQuery] int branchId, [FromQuery] DateTime? date = null)
+    public async Task<ActionResult<DashboardSummaryDto>> GetDashboardSummary([FromQuery] int branchId, [FromQuery] DateTime? date = null, [FromQuery] int days = 30)
     {
         var targetDate = date ?? DateTime.Today;
-        var startOfDay = targetDate.Date;
-        var endOfDay = startOfDay.AddDays(1);
+        
+        // For today's orders count - use only today
+        var startOfToday = targetDate.Date;
+        var endOfToday = targetDate.Date.AddDays(1);
+        
+        // For total revenue - use last 30 days
+        var startOf30Days = targetDate.Date.AddDays(-days);
+        var endOf30Days = targetDate.Date.AddDays(1);
 
-        // Lấy tất cả invoice trong ngày theo chi nhánh
+        // Get today's invoices for counts
         var todayInvoices = await _context.Invoices
-            .Where(i => i.BranchId == branchId && i.InvoiceDate >= startOfDay && i.InvoiceDate < endOfDay)
+            .Where(i => i.BranchId == branchId && i.InvoiceDate >= startOfToday && i.InvoiceDate < endOfToday)
             .ToListAsync();
+            
+        // Get all invoices for revenue calculation
+        var allInvoices = await _context.Invoices
+            .Where(i => i.BranchId == branchId && i.InvoiceDate >= startOf30Days && i.InvoiceDate < endOf30Days)
+            .ToListAsync();
+            
+        // Get all pending orders from branch (not just today)
+        var allPendingOrders = await _context.Invoices
+            .Where(i => i.BranchId == branchId && i.Status == "Pending")
+            .CountAsync();
 
         // Đếm và tính toán thống kê
-        var totalOrders = todayInvoices.Count;
-        var totalRevenue = todayInvoices.Sum(i => i.FinalAmount);
-        var completedOrders = todayInvoices.Count(i => i.PaymentMethod != null); // Assuming all invoices are completed if they have payment method
-        var pendingOrders = 0; // For now, assuming all invoices are completed
+        var totalOrdersToday = todayInvoices.Count;
+        var totalRevenue = allInvoices.Where(i => i.Status == "Completed").Sum(i => i.FinalAmount);
+        var completedOrdersToday = todayInvoices.Count(i => i.Status == "Completed");
 
         return new DashboardSummaryDto
         {
-            TotalOrdersToday = totalOrders,
-            PendingOrders = pendingOrders,
-            CompletedOrders = completedOrders,
+            TotalOrdersToday = totalOrdersToday,
+            PendingOrders = allPendingOrders,
+            CompletedOrders = completedOrdersToday,
             TotalRevenue = totalRevenue ?? 0
         };
     }
 
     /// <summary>
-    /// Gets recent orders (invoices) for today by branch.
+    /// Gets recent orders (invoices) for a date range by branch.
     /// </summary>
     [HttpGet("today-orders")]
-    public async Task<ActionResult<List<OrderDetailDto>>> GetTodayOrders([FromQuery] int branchId, [FromQuery] int take = 20, [FromQuery] DateTime? date = null)
+    public async Task<ActionResult<List<OrderDetailDto>>> GetTodayOrders([FromQuery] int branchId, [FromQuery] int take = 20, [FromQuery] DateTime? date = null, [FromQuery] int days = 30)
     {
         var targetDate = date ?? DateTime.Today;
-        var startOfDay = targetDate.Date;
-        var endOfDay = startOfDay.AddDays(1);
+        var startOfDay = targetDate.Date.AddDays(-days); // Default to last 30 days
+        var endOfDay = targetDate.Date.AddDays(1);
 
         var orders = await _context.Invoices
             .Where(i => i.BranchId == branchId && i.InvoiceDate >= startOfDay && i.InvoiceDate < endOfDay)
@@ -78,7 +93,7 @@ public class SalesDashboardController : ControllerBase
                 CustomerName = i.Customer != null ? i.Customer.FullName : "N/A",
                 Products = string.Join(", ", i.InvoiceItems.Select(ii => ii.ItemType == "PRODUCT" ? ii.ServiceId.ToString() : ii.ProductId.ToString())),
                 Amount = i.FinalAmount ?? 0,
-                Status = "completed"
+                Status = i.Status ?? "Pending"
             })
             .ToListAsync();
 

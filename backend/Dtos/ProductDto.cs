@@ -28,6 +28,13 @@ public class ProductDto
     [Range(0, int.MaxValue, ErrorMessage = "StockQty must be non-negative.")]
     public int? StockQty { get; set; }
 
+    /// <summary>Branch ID (optional).</summary>
+    public int? BranchId { get; set; }
+
+    /// <summary>Quantity in stock (alias for StockQty).</summary>
+    [Range(0, int.MaxValue, ErrorMessage = "Quantity must be non-negative.")]
+    public int? Quantity { get; set; }
+
     /// <summary>Reorder point (optional).</summary>
     [Range(0, int.MaxValue, ErrorMessage = "ReorderPoint must be non-negative.")]
     public int? ReorderPoint { get; set; }

@@ -121,9 +121,11 @@ export default function SalesDashboard() {
       completed: { label: "Hoàn thành", class: "bg-green-100 text-green-800" },
       pending: { label: "Chờ xử lý", class: "bg-orange-100 text-orange-800" },
       processing: { label: "Đang xử lý", class: "bg-blue-100 text-blue-800" },
+      paid: { label: "Đã thanh toán", class: "bg-green-100 text-green-800" },
     }
-    const { label, class: className } = config[status as keyof typeof config]
-    return <span className={`text-xs px-2 py-1 rounded font-medium ${className}`}>{label}</span>
+    const statusLower = (status || "pending").toLowerCase()
+    const badgeConfig = config[statusLower as keyof typeof config] || { label: status || "Chờ xử lý", class: "bg-gray-100 text-gray-800" }
+    return <span className={`text-xs px-2 py-1 rounded font-medium ${badgeConfig.class}`}>{badgeConfig.label}</span>
   }
 
   const formatTime = (dateTime: string) => {

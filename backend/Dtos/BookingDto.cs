@@ -33,4 +33,8 @@ public class BookingDto
     [Required]
     [StringLength(20)]
     public string Status { get; set; } = null!;
+
+    /// <summary>Notes for the booking.</summary>
+    [StringLength(500)]
+    public string? Notes { get; set; }
 }

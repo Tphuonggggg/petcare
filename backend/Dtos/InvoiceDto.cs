@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
@@ -16,8 +17,20 @@ public class InvoiceDto
     /// <summary>Branch where invoice was created (optional).</summary>
     public int? BranchId { get; set; }
 
+    /// <summary>Branch name (optional, for display).</summary>
+    [StringLength(100)]
+    public string? BranchName { get; set; }
+
     /// <summary>Customer billed (optional).</summary>
     public int? CustomerId { get; set; }
+
+    /// <summary>Customer name (optional, for display).</summary>
+    [StringLength(200)]
+    public string? CustomerName { get; set; }
+
+    /// <summary>Customer phone (optional, for display).</summary>
+    [StringLength(20)]
+    public string? CustomerPhone { get; set; }
 
     /// <summary>Employee who processed the invoice (optional).</summary>
     public int? EmployeeId { get; set; }
@@ -26,7 +39,6 @@ public class InvoiceDto
     public int? PetId { get; set; }
 
     /// <summary>Date of the invoice.</summary>
-    [Required]
     public DateTime? InvoiceDate { get; set; }
 
     /// <summary>Total amount before discounts.</summary>
@@ -44,4 +56,16 @@ public class InvoiceDto
     /// <summary>Payment method used.</summary>
     [StringLength(100)]
     public string? PaymentMethod { get; set; }
+
+    /// <summary>Invoice status (Pending, Paid, Cancelled).</summary>
+    [StringLength(20)]
+    public string? Status { get; set; } = "Pending";
+
+    /// <summary>Notes about the invoice.</summary>
+    [StringLength(500)]
+    public string? Notes { get; set; }
+
+    /// <summary>Invoice items (line items).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public List<InvoiceItemDto>? Items { get; set; }
 }

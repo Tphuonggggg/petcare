@@ -249,10 +249,12 @@ CREATE TABLE Invoice (
     FinalAmount AS (TotalAmount - DiscountAmount),
 
     PaymentMethod NVARCHAR(20) NOT NULL,
+    Status NVARCHAR(20) NOT NULL DEFAULT 'Pending',
 
     CONSTRAINT CK_Invoice_Total CHECK (TotalAmount > 0),
     CONSTRAINT CK_Invoice_Discount CHECK (DiscountAmount >= 0),
     CONSTRAINT CK_Invoice_Method CHECK (PaymentMethod IN ('CASH','CARD','BANKING')),
+    CONSTRAINT CK_Invoice_Status CHECK (Status IN ('Pending','Paid','Cancelled')),
 
     FOREIGN KEY (BranchID) REFERENCES Branch(BranchID),
     FOREIGN KEY (CustomerID) REFERENCES Customer(CustomerID),

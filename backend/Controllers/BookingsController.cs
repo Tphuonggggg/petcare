@@ -71,15 +71,34 @@ public class BookingsController : ControllerBase
     public async Task<IActionResult> Put(int id, BookingDto dto)
     {
         if (id != dto.BookingId) return BadRequest();
-        var entity = _mapper.Map<Booking>(dto);
-        _context.Entry(entity).State = EntityState.Modified;
-        try { await _context.SaveChangesAsync(); }
-        catch (DbUpdateConcurrencyException)
+        
+        var entity = await _context.Bookings.FindAsync(id);
+        if (entity == null) return NotFound();
+        
+        // Validate DateTime fields
+        var minDate = new DateTime(1753, 1, 1);
+        var maxDate = new DateTime(9999, 12, 31);
+        
+        if (dto.RequestedDateTime < minDate || dto.RequestedDateTime > maxDate)
+            return BadRequest("RequestedDateTime must be between 1753-01-01 and 9999-12-31");
+        
+        // Use raw SQL to bypass trigger OUTPUT clause issue
+        // Only update Status and Notes - don't touch FK fields
+        try
         {
-            if (!_context.Bookings.Any(x => x.BookingId == id)) return NotFound();
-            throw;
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE Booking 
+                SET 
+                    Status = {dto.Status},
+                    Notes = {dto.Notes}
+                WHERE BookingId = {id}
+            ");
+            return NoContent();
         }
-        return NoContent();
+        catch (Exception ex)
+        {
+            return StatusCode(500, ex.Message);
+        }
     }
 
     /// <summary>

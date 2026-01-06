@@ -15,13 +15,13 @@ public partial class CheckHealth
     public int PetId { get; set; }
 
     /// <summary>Doctor (employee) who performed the check.</summary>
-    public int DoctorId { get; set; }
+    public int? DoctorId { get; set; }
 
     /// <summary>Date of the check.</summary>
-    public DateTime CheckDate { get; set; }
+    public DateTime? CheckDate { get; set; }
 
     /// <summary>Reported symptoms.</summary>
-    public string Symptoms { get; set; } = null!;
+    public string? Symptoms { get; set; }
 
     /// <summary>Diagnosis notes (optional).</summary>
     public string? Diagnosis { get; set; }
