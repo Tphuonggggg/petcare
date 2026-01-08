@@ -1,268 +1,187 @@
 ﻿"use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { PawPrint, ArrowLeft, Search, Plus, Filter, ChevronLeft, ChevronRight } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { apiGet, apiPost } from "@/lib/api"
+import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ArrowRight, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { apiGet } from '@/lib/api'
 
-interface OrderDetail {
+interface OrderItem {
+  invoiceItemId: number
+  productName?: string
+  serviceName?: string
+  quantity: number
+  unitPrice: number
+  totalPrice: number
+}
+
+interface OrderData {
   invoiceId: number
-  customerId?: number
+  customerId: number
+  branchId: number
+  branchName?: string
+  invoiceDate: string
+  totalAmount: number
+  discountAmount: number
+  finalAmount: number
+  status: string
+  paymentMethod: string
   customerName?: string
   customerPhone?: string
-  invoiceDate?: string
-  totalAmount?: number
-  discountAmount?: number
-  finalAmount?: number
-  paymentMethod?: string
-  status?: string
-  branchId?: number
-  branchName?: string
-  items?: Array<{ productId: number; quantity: number; unitPrice: number }>
+  items?: OrderItem[]
+}
+
+interface Branch {
+  branchId: number
+  name: string
 }
 
 export default function SalesOrdersPage() {
   const router = useRouter()
-  const [searchQuery, setSearchQuery] = useState("")
-  const [orders, setOrders] = useState<OrderDetail[]>([])
+  const { toast } = useToast()
+  
+  const [userBranchId, setUserBranchId] = useState<number | null>(null)
+  const [branchName, setBranchName] = useState<string>('')
+  const [orders, setOrders] = useState<OrderData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Search & Filter
+  const [searchId, setSearchId] = useState('')
+  const [filterToday, setFilterToday] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<string | null>(null)
+  const [filteredOrders, setFilteredOrders] = useState<OrderData[]>([])
+  const [totalOrders, setTotalOrders] = useState(0)
+  
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [branchId, setBranchId] = useState<number | null>(null)
   const pageSize = 10
 
   useEffect(() => {
-    // Get branchId from localStorage
-    const stored = localStorage.getItem('branchId')
-    if (stored) {
-      setBranchId(parseInt(stored))
+    // Get branchId từ localStorage (set khi login)
+    const branchIdFromStorage = localStorage.getItem('branchId')
+    const userData = localStorage.getItem('user')
+    
+    if (!branchIdFromStorage || !userData) {
+      router.push('/login')
+      return
+    }
+    
+    const branchId = parseInt(branchIdFromStorage)
+    setUserBranchId(branchId)
+    
+    // Parse branch name từ user data nếu có
+    try {
+      const user = JSON.parse(userData)
+      // Load orders với branchId cố định
+      loadOrders(branchId)
+    } catch (err) {
+      console.error("Error parsing user data:", err)
+      loadOrders(branchId)
     }
   }, [])
 
-  const getStatusBadge = (status: string) => {
-    const config: Record<string, { label: string; class: string }> = {
-      completed: { label: "Hoàn thành", class: "bg-green-100 text-green-800" },
-      pending: { label: "Chờ xử lý", class: "bg-orange-100 text-orange-800" },
-      processing: { label: "Đang xử lý", class: "bg-blue-100 text-blue-800" },
-      cancelled: { label: "Đã hủy", class: "bg-red-100 text-red-800" },
+  useEffect(() => {
+    if (userBranchId) {
+      loadOrders(userBranchId)
     }
-    const cfg = config[status] ?? { label: status, class: "bg-gray-100 text-gray-800" }
-    return <span className={`text-xs px-2 py-1 rounded font-medium ${cfg.class}`}>{cfg.label}</span>
-  }
+  }, [userBranchId])
 
   useEffect(() => {
-    if (branchId) {
-      loadOrders()
+    let filtered = orders
+    
+    // Lọc theo ngày hôm nay nếu được chọn
+    if (filterToday) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      
+      filtered = filtered.filter(order => {
+        const orderDate = new Date(order.invoiceDate)
+        return orderDate >= today && orderDate < tomorrow
+      })
     }
-  }, [currentPage, branchId])
+    
+    // Lọc theo trạng thái
+    if (filterStatus) {
+      filtered = filtered.filter(order => 
+        order.status?.toLowerCase() === filterStatus.toLowerCase()
+      )
+    }
+    
+    // Lọc theo search ID hoặc tên khách
+    if (searchId.trim()) {
+      filtered = filtered.filter(order => 
+        order.invoiceId.toString().includes(searchId) ||
+        order.customerName?.toLowerCase().includes(searchId.toLowerCase())
+      )
+    }
+    
+    setFilteredOrders(filtered)
+    setCurrentPage(1) // Reset to first page when filters change
+  }, [searchId, filterToday, filterStatus, orders])
 
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async (branchId: number) => {
     try {
       setLoading(true)
       setError(null)
-      const data = await apiGet(`/invoices?page=${currentPage}&pageSize=${pageSize}&branchId=${branchId}`)
-      const orderList = data.items || data || []
-      setOrders(Array.isArray(orderList) ? orderList : [])
-      // Tính totalPages từ TotalCount
-      const totalCount = data.totalCount || 0
-      const calculatedPages = Math.ceil(totalCount / pageSize) || 1
-      setTotalPages(calculatedPages)
+      
+      // Load toàn bộ dữ liệu đơn hàng của chi nhánh (không phân trang)
+      const url = `/invoices?pageSize=10000&page=1&branchId=${branchId}`
+      
+      const data = await apiGet(url)
+      setOrders(data.items || [])
+      setTotalOrders(data.total || 0)
+      
+      // Set branch name từ first order nếu có
+      if (data.items && data.items.length > 0 && data.items[0].branchName) {
+        setBranchName(data.items[0].branchName)
+      }
     } catch (err) {
       console.error("Error loading orders:", err)
       setError("Không thể tải danh sách đơn hàng")
-      setOrders([])
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải danh sách đơn hàng",
+        variant: "destructive"
+      })
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
 
-  const handleConfirmOrder = async (invoiceId: number) => {
-    try {
-      // First get invoice details to have all required fields
-      const invoiceData = await apiGet(`/invoices/${invoiceId}`)
-      
-      const response = await fetch(`http://localhost:5000/api/invoices/${invoiceId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          invoiceId: invoiceId,
-          status: 'Processing',
-          branchId: invoiceData?.branchId || 1,
-          customerId: invoiceData?.customerId || 1,
-          employeeId: 1,
-          totalAmount: invoiceData?.totalAmount || 0,
-          discountAmount: invoiceData?.discountAmount || 0,
-          finalAmount: invoiceData?.finalAmount || 0,
-          paymentMethod: invoiceData?.paymentMethod || 'CASH'
-        })
-      })
-      if (response.ok) {
-        alert('Đơn hàng đang xử lý')
-        loadOrders()
-      }
-    } catch (err) {
-      console.error("Error confirming order:", err)
-      alert('Lỗi khi xác nhận đơn hàng')
+  const getStatusBadge = (status?: string) => {
+    const config: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+      pending: { label: "Chờ xử lý", variant: "secondary" },
+      processing: { label: "Đang xử lý", variant: "outline" },
+      paid: { label: "Đã thanh toán & Hoàn thành", variant: "default" },
+      cancelled: { label: "Đã hủy", variant: "destructive" },
     }
+    const s = (status ?? "pending").toLowerCase()
+    const cfg = config[s] ?? { label: status, variant: "outline" }
+    return <Badge variant={cfg.variant}>{cfg.label}</Badge>
   }
 
-  const handleCompleteOrder = async (invoiceId: number) => {
-    try {
-      // First get invoice details to have all required fields
-      const invoiceData = await apiGet(`/invoices/${invoiceId}`)
-      
-      const response = await fetch(`http://localhost:5000/api/invoices/${invoiceId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          invoiceId: invoiceId,
-          status: 'Completed',
-          branchId: invoiceData?.branchId || 1,
-          customerId: invoiceData?.customerId || 1,
-          employeeId: 1,
-          totalAmount: invoiceData?.totalAmount || 0,
-          discountAmount: invoiceData?.discountAmount || 0,
-          finalAmount: invoiceData?.finalAmount || 0,
-          paymentMethod: invoiceData?.paymentMethod || 'CASH'
-        })
-      })
-      if (response.ok) {
-        alert('Đơn hàng hoàn thành')
-        loadOrders()
-      }
-    } catch (err) {
-      console.error("Error completing order:", err)
-      alert('Lỗi khi hoàn thành đơn hàng')
-    }
+  const handleViewOrder = (invoiceId: number) => {
+    router.push(`/sales/orders/${invoiceId}`)
   }
 
-  const handlePrintInvoice = (invoiceId: number) => {
-    window.open(`/sales/orders/${invoiceId}/print`, '_blank')
-  }
+  // Pagination calculation
+  const totalPages = Math.ceil(filteredOrders.length / pageSize)
+  const paginatedOrders = filteredOrders.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  )
 
-  const getFilteredOrders = (filterType: string) => {
-    const today = new Date().toISOString().split('T')[0]
-    const query = searchQuery.toLowerCase().trim()
-    
-    return orders.filter(order => {
-      const orderDate = order.invoiceDate ? order.invoiceDate.split('T')[0] : ''
-      const status = (order.status ?? 'pending').toLowerCase()
-      
-      switch (filterType) {
-        case 'today':
-          return orderDate === today
-        case 'pending':
-          return status === 'pending'
-        case 'processing':
-          return status === 'processing'
-        case 'completed':
-          return status === 'completed'
-        default:
-          return true
-      }
-    }).filter(o => {
-      if (!query) return true
-      
-      // Search by invoice ID
-      const id = String(o.invoiceId ?? '')
-      if (id.includes(query)) return true
-      
-      // Search by customer name
-      const customer = String(o.customerName ?? '').toLowerCase()
-      if (customer.includes(query)) return true
-      
-      // Search by customer phone
-      const phone = String(o.customerPhone ?? '').toLowerCase()
-      if (phone.includes(query)) return true
-      
-      // Search by payment method
-      const payment = String(o.paymentMethod ?? '').toLowerCase()
-      if (payment.includes(query)) return true
-      
-      // Search by amount (final amount)
-      const finalAmount = String(o.finalAmount ?? '').replace(/\D/g, '')
-      const queryNumber = query.replace(/\D/g, '')
-      if (finalAmount.includes(queryNumber) && queryNumber) return true
-      
-      return false
-    })
-  }
-
-  const renderOrdersList = (filterType: string) => {
-    const filtered = getFilteredOrders(filterType)
-    
-    if (filtered.length === 0) {
-      return <p className="text-muted-foreground text-center py-8">Không có đơn hàng nào</p>
-    }
-
+  if (loading) {
     return (
-      <div className="space-y-4">
-        {filtered.map((order) => {
-          const id = order?.invoiceId
-          const date = order?.invoiceDate ? new Date(order.invoiceDate).toLocaleDateString('vi-VN') : 'N/A'
-          const customer = order?.customerName ?? 'N/A'
-          const phone = order?.customerPhone ?? 'N/A'
-          const total = order?.finalAmount ?? order?.totalAmount ?? 0
-          const status = (order?.status ?? 'pending').toLowerCase()
-          
-          return (
-            <Card key={id}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="flex items-center gap-3 mb-2">
-                      <CardTitle className="font-mono">ĐH{id}</CardTitle>
-                      {getStatusBadge(status)}
-                    </div>
-                    <p className="text-sm text-muted-foreground">{date}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-primary">{typeof total === 'number' ? total.toLocaleString() : total}đ</p>
-                    <p className="text-xs text-muted-foreground">{order.paymentMethod || 'Chưa thanh toán'}</p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-4">
-                  <p className="font-medium mb-1">Khách hàng</p>
-                  <p className="text-sm text-muted-foreground">{customer} - {phone}</p>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1 bg-transparent"
-                    onClick={() => router.push(`/sales/orders/${id}`)}
-                  >
-                    Xem chi tiết
-                  </Button>
-                  <Button size="sm" variant="outline" className="flex-1 bg-transparent"
-                    onClick={() => handlePrintInvoice(id)}
-                  >
-                    In hóa đơn
-                  </Button>
-                  {status === "pending" && (
-                    <Button size="sm" className="flex-1"
-                      onClick={() => handleConfirmOrder(id)}
-                    >
-                      Xác nhận
-                    </Button>
-                  )}
-                  {status === "processing" && (
-                    <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700"
-                      onClick={() => handleCompleteOrder(id)}
-                    >
-                      Hoàn thành
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <p className="text-muted-foreground">Đang tải...</p>
       </div>
     )
   }
@@ -270,110 +189,187 @@ export default function SalesOrdersPage() {
   return (
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-background">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.push("/sales")}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div className="flex items-center gap-2">
-              <PawPrint className="h-6 w-6 text-primary" />
-              <span className="font-bold">PetCare - Bán hàng</span>
-            </div>
-          </div>
-          <Button variant="outline" onClick={() => { import('@/lib/auth').then(m => m.logout('/')) }}>
-            Đăng xuất
-          </Button>
+        <div className="container mx-auto px-4 h-16 flex items-center">
+          <h1 className="font-bold text-2xl">
+            Danh sách đơn hàng 
+            {branchName && <span className="text-muted-foreground font-normal"> • {branchName}</span>}
+          </h1>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Quản lý đơn hàng</h1>
-            <p className="text-muted-foreground">Xem và quản lý tất cả đơn hàng</p>
+        {/* Filters */}
+        <div className="mb-6 space-y-4">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input
+                placeholder="Tìm theo ID đơn hàng hoặc tên khách..."
+                value={searchId}
+                onChange={(e) => setSearchId(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Button
+              variant={filterToday ? "default" : "outline"}
+              onClick={() => setFilterToday(!filterToday)}
+            >
+              Hôm nay
+            </Button>
           </div>
-          <Button onClick={() => router.push("/sales/orders/new")}>
-            <Plus className="h-4 w-4 mr-2" />
-            Tạo đơn hàng
-          </Button>
+          
+          {/* Status Filter Buttons */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={filterStatus === null ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterStatus(null)}
+            >
+              Tất cả
+            </Button>
+            <Button
+              variant={filterStatus === "pending" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterStatus("pending")}
+            >
+              Chờ xử lý
+            </Button>
+            <Button
+              variant={filterStatus === "processing" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterStatus("processing")}
+            >
+              Đang xử lý
+            </Button>
+            <Button
+              variant={filterStatus === "paid" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterStatus("paid")}
+            >
+              Đã thanh toán & Hoàn thành
+            </Button>
+            <Button
+              variant={filterStatus === "cancelled" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterStatus("cancelled")}
+            >
+              Đã hủy
+            </Button>
+          </div>
         </div>
 
-        <div className="flex gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Tìm kiếm theo mã đơn, tên khách hàng..."
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        {error && (
+          <Card className="border-red-200 bg-red-50 mb-6">
+            <CardContent className="pt-6">
+              <p className="text-red-600">{error}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {filteredOrders.length === 0 ? (
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-center text-muted-foreground">
+                {orders.length === 0 ? 'Không có đơn hàng nào' : 'Không tìm thấy đơn hàng phù hợp'}
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {paginatedOrders.map((order) => (
+              <Card 
+                key={order.invoiceId} 
+                className="hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => handleViewOrder(order.invoiceId)}
+              >
+                <CardContent className="pt-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <h3 className="font-mono font-bold text-lg">ĐH{order.invoiceId}</h3>
+                        {getStatusBadge(order.status)}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {order.customerName || 'N/A'} • {order.customerPhone || 'N/A'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Chi nhánh: {order.branchName || 'N/A'} • {order.invoiceDate ? new Date(order.invoiceDate).toLocaleDateString('vi-VN', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }) : 'N/A'}
+                      </p>
+                      {order.items && order.items.length > 0 && (
+                        <p className="text-sm">
+                          <span className="text-muted-foreground">Sản phẩm:</span> {order.items.length} mục
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Tổng tiền</p>
+                        <p className="text-xl font-bold text-primary">
+                          {(order.finalAmount || order.totalAmount || 0).toLocaleString()}đ
+                        </p>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleViewOrder(order.invoiceId)
+                        }}
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-          <Button variant="outline" className="bg-transparent">
-            <Filter className="h-4 w-4 mr-2" />
-            Lọc
-          </Button>
-        </div>
-
-        <Tabs defaultValue="all">
-          <TabsList className="mb-6">
-            <TabsTrigger value="all">Tất cả</TabsTrigger>
-            <TabsTrigger value="pending">Chờ xử lý</TabsTrigger>
-            <TabsTrigger value="processing">Đang xử lý</TabsTrigger>
-            <TabsTrigger value="completed">Hoàn thành</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="all">
-            {loading ? (
-              <p className="text-muted-foreground text-center py-8">Đang tải đơn hàng...</p>
-            ) : error ? (
-              <div className="text-center py-8">
-                <p className="text-red-600 mb-4">{error}</p>
-                <Button onClick={loadOrders}>Thử lại</Button>
-              </div>
-            ) : (
-              renderOrdersList('all')
-            )}
-          </TabsContent>
-
-          <TabsContent value="pending">
-            {renderOrdersList('pending')}
-          </TabsContent>
-
-          <TabsContent value="processing">
-            {renderOrdersList('processing')}
-          </TabsContent>
-
-          <TabsContent value="completed">
-            {renderOrdersList('completed')}
-          </TabsContent>
-        </Tabs>
+        )}
 
         {/* Pagination */}
-        {orders.length > 0 && (
-          <div className="flex items-center justify-between mt-8">
+        {totalPages > 1 && (
+          <div className="mt-8 flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Trang {currentPage} của {totalPages}
+              Trang {currentPage} trong {totalPages} • {filteredOrders.length} đơn hàng
             </p>
+            
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1 || loading}
+                disabled={currentPage === 1}
               >
-                <ChevronLeft className="h-4 w-4 mr-1" />
+                <ChevronLeft className="h-4 w-4" />
                 Trước
               </Button>
+              
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages || loading}
+                disabled={currentPage === totalPages}
               >
-                Tiếp
-                <ChevronRight className="h-4 w-4 ml-1" />
+                Sau
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+          </div>
+        )}
+
+        {/* Summary */}
+        {totalPages <= 1 && (
+          <div className="mt-8 text-sm text-muted-foreground text-right">
+            {filteredOrders.length} đơn hàng
+            {filterToday && ' (hôm nay)'}
+            {searchId && ` (tìm: "${searchId}")`}
           </div>
         )}
       </main>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -32,19 +32,50 @@ export default function ReceptionPetsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
   const [totalCount, setTotalCount] = useState(0)
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [isSearching, setIsSearching] = useState(false) // Track search state
 
   useEffect(() => {
-    loadData()
-  }, [currentPage])
+    if (!isSearching) { // Only load paginated data when not searching
+      loadData()
+    }
+  }, [currentPage, isSearching])
 
   const loadData = async () => {
     try {
       setLoading(true)
       
-      // Load both pets and customers
+      // Reset search query and search state when loading paginated data
+      setSearchQuery("")
+      setIsSearching(false)
+      
+      // Get branchId from localStorage
+      let branchId = localStorage.getItem("branchId")
+      if (!branchId) {
+        const employeeId = localStorage.getItem("employeeId")
+        if (employeeId) {
+          try {
+            const empData = await apiGet(`/employees/${employeeId}`)
+            branchId = empData.branchId?.toString()
+            if (branchId) {
+              localStorage.setItem("branchId", branchId)
+            }
+          } catch (error) {
+            console.error("Error loading employee info:", error)
+          }
+        }
+      }
+      
+      if (!branchId) {
+        branchId = "9" // Default to Tân Phú for testing
+      }
+      
+      console.log(`[DEBUG] Loading pets for branchId: ${branchId}`)
+      
+      // Load both pets and customers with branch filter
       const [petsData, customersData] = await Promise.all([
-        apiGet(`/pets?page=${currentPage}&pageSize=${pageSize}`),
-        apiGet("/customers?page=1&pageSize=100")
+        apiGet(`/pets?page=${currentPage}&pageSize=${pageSize}&branchId=${branchId}`),
+        apiGet("/customers?page=1&pageSize=1000")
       ])
       
       console.log('Pets data:', petsData)
@@ -77,6 +108,7 @@ export default function ReceptionPetsPage() {
       }))
       
       console.log('Enriched pets:', enrichedPets)
+      console.log(`[DEBUG] Setting ${enrichedPets.length} pets for page ${currentPage}`)
       
       setPets(enrichedPets)
       setFilteredPets(enrichedPets)
@@ -91,19 +123,47 @@ export default function ReceptionPetsPage() {
   const handleSearch = (query: string) => {
     setSearchQuery(query)
     
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+    
+    // If empty query, reload current page data
     if (!query.trim()) {
-      setFilteredPets(pets)
+      setIsSearching(false) // Exit search mode
+      loadData() // Reload paginated data
       return
     }
 
-    const lowerQuery = query.toLowerCase()
-    const filtered = pets.filter(pet =>
-      pet.name.toLowerCase().includes(lowerQuery) ||
-      pet.customerName?.toLowerCase().includes(lowerQuery) ||
-      pet.species?.toLowerCase().includes(lowerQuery) ||
-      pet.breed?.toLowerCase().includes(lowerQuery)
-    )
-    setFilteredPets(filtered)
+    // Enter search mode
+    setIsSearching(true)
+    setCurrentPage(1) // Reset to page 1 when searching
+
+    // Debounce search by 300ms
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setLoading(true)
+        
+        // Use server-side search - search across all pets (no branchId filter)
+        const petsData = await apiGet(`/pets?page=1&pageSize=100&search=${encodeURIComponent(query)}`)
+        
+        let petList = []
+        if (Array.isArray(petsData)) {
+          petList = petsData
+        } else if (petsData && petsData.items) {
+          petList = petsData.items
+          setTotalCount(petsData.totalCount || 0)
+        }
+        
+        console.log(`Search results: ${petList.length} pets found for "${query}"`)
+        setPets(petList)
+        setFilteredPets(petList)  // Update filteredPets for display
+      } catch (error) {
+        console.error("Error searching pets:", error)
+      } finally {
+        setLoading(false)
+      }
+    }, 300)
   }
 
   return (

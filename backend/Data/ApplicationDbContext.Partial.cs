@@ -11,12 +11,22 @@ public partial class ApplicationDbContext
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
     {
         // Configure Invoice table to work with database triggers
-        // by disabling the use of OUTPUT clause
         modelBuilder.Entity<Invoice>(entity =>
         {
-            // Disable identity column identity behavior to work with triggers
+            // Configure to avoid OUTPUT clause conflicts with triggers
             entity.Property(e => e.InvoiceId)
-                .ValueGeneratedOnAdd();
+                .ValueGeneratedOnAdd()
+                .HasAnnotation("SqlServer:ValueGenerationStrategy", Microsoft.EntityFrameworkCore.Metadata.SqlServerValueGenerationStrategy.IdentityColumn);
+                
+            // Mark table as having triggers to disable OUTPUT clause
+            entity.ToTable("Invoice", tb => tb.HasTrigger("trg_InvoiceItem_UpdateInvoiceTotal"));
+        });
+        
+        // Configure InvoiceItem table triggers  
+        modelBuilder.Entity<InvoiceItem>(entity =>
+        {
+            // Mark table as having triggers to disable OUTPUT clause
+            entity.ToTable("InvoiceItem", tb => tb.HasTrigger("trg_InvoiceItem_UpdateInvoiceTotal"));
         });
     }
 }

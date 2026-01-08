@@ -29,14 +29,21 @@ public class VaccineRecordsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns paginated vaccine records.
+    /// Returns paginated vaccine records, optionally filtered by branch.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<PaginatedResult<VaccineRecordDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<ActionResult<PaginatedResult<VaccineRecordDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] int? branchId = null)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 20;
         var q = _context.VaccineRecords.AsQueryable();
+        
+        // Filter by branch if provided
+        if (branchId.HasValue)
+        {
+            q = q.Where(v => v.BranchId == branchId.Value);
+        }
+        
         var total = await q.CountAsync();
         var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
         var dtos = _mapper.Map<List<VaccineRecordDto>>(items);

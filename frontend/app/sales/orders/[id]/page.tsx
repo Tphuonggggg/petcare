@@ -1,162 +1,170 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter, useParams } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { PawPrint, ArrowLeft, Printer } from "lucide-react"
-import { apiGet } from "@/lib/api"
+import { useEffect, useState } from 'react'
+import { useRouter, useParams } from 'next/navigation'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { ArrowLeft, Printer, Check } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { apiGet, apiPost, apiPut } from '@/lib/api'
 
-interface InvoiceItem {
-  productId?: number
-  serviceId?: number
-  itemType?: string
-  quantity?: number
-  unitPrice?: number
-  productName?: string
-  serviceName?: string
-}
-
-interface InvoiceDetail {
+interface OrderData {
   invoiceId: number
-  invoiceDate?: string
-  customerId?: number
+  customerId: number
+  branchId: number
+  branchName?: string
+  petId?: number
+  invoiceDate: string
+  totalAmount: number
+  discountAmount: number
+  finalAmount: number
+  status: string
+  paymentMethod: string
+  notes?: string
   customerName?: string
   customerPhone?: string
-  totalAmount?: number
-  discountAmount?: number
-  finalAmount?: number
-  paymentMethod?: string
-  status?: string
-  branchId?: number
-  branchName?: string
-  items?: InvoiceItem[]
+  customerEmail?: string
+  items?: {
+    invoiceItemId: number
+    productId?: number
+    productName?: string
+    serviceName?: string
+    quantity: number
+    unitPrice: number
+    totalPrice: number
+    itemType: string
+  }[]
 }
 
-export default function InvoiceDetailPage() {
+export default function SalesOrderDetailPage() {
   const router = useRouter()
   const params = useParams()
-  const invoiceId = params?.id ? parseInt(params.id as string) : 0
+  const { toast } = useToast()
+  const invoiceId = parseInt(params.id as string, 10)
   
-  const [invoice, setInvoice] = useState<InvoiceDetail | null>(null)
+  const [order, setOrder] = useState<OrderData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [completing, setCompleting] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   useEffect(() => {
     if (invoiceId) {
-      loadInvoice()
+      loadOrder()
     }
   }, [invoiceId])
 
-  const loadInvoice = async () => {
+  const loadOrder = async () => {
     try {
       setLoading(true)
       setError(null)
       const data = await apiGet(`/invoices/${invoiceId}`)
-      
-      // Fetch product/service names if not available
-      if (data.items && data.items.length > 0) {
-        const itemsWithNames = await Promise.all(
-          data.items.map(async (item: InvoiceItem) => {
-            if (!item.productName && item.productId && item.itemType === 'PRODUCT') {
-              try {
-                const product = await apiGet(`/products/${item.productId}`)
-                item.productName = product.name
-              } catch (e) {
-                console.error(`Failed to fetch product ${item.productId}`)
-              }
-            }
-            if (!item.serviceName && item.serviceId && item.itemType === 'SERVICE') {
-              try {
-                const service = await apiGet(`/services/${item.serviceId}`)
-                item.serviceName = service.name
-              } catch (e) {
-                console.error(`Failed to fetch service ${item.serviceId}`)
-              }
-            }
-            return item
-          })
-        )
-        data.items = itemsWithNames
-      }
-      
-      setInvoice(data)
+      console.log("Order data:", data)
+      setOrder(data)
     } catch (err) {
-      console.error("Error loading invoice:", err)
+      console.error("Error loading order:", err)
       setError("Không thể tải chi tiết hóa đơn")
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải chi tiết hóa đơn",
+        variant: "destructive"
+      })
     } finally {
       setLoading(false)
     }
   }
 
   const handleConfirmOrder = async () => {
+    if (!order) return
     try {
-      const response = await fetch(`http://localhost:5000/api/invoices/${invoiceId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          invoiceId: invoiceId,
-          status: 'Processing',
-          branchId: invoice?.branchId || 1,
-          customerId: invoice?.customerId || 1,
-          employeeId: 1,
-          totalAmount: invoice?.totalAmount || 0,
-          discountAmount: invoice?.discountAmount || 0,
-          finalAmount: invoice?.finalAmount || 0,
-          paymentMethod: invoice?.paymentMethod || 'CASH'
-        })
+      setConfirming(true)
+      await apiPut(`/invoices/${order.invoiceId}/status`, { status: "processing" })
+      
+      // Reload order to get updated status
+      await loadOrder()
+      
+      toast({
+        title: "Thành công",
+        description: "Đơn hàng đã được xác nhận"
       })
-      if (response.ok) {
-        alert('Đơn hàng đã được xác nhận và đang xử lý')
-        loadInvoice() // Reload to get updated status
-      } else {
-        alert('Lỗi khi xác nhận đơn hàng')
-      }
     } catch (err) {
       console.error("Error confirming order:", err)
-      alert('Lỗi khi xác nhận đơn hàng')
+      toast({
+        title: "Lỗi",
+        description: "Không thể xác nhận đơn hàng",
+        variant: "destructive"
+      })
+    } finally {
+      setConfirming(false)
     }
   }
 
   const handleCompleteOrder = async () => {
+    if (!order) return
     try {
-      const response = await fetch(`http://localhost:5000/api/invoices/${invoiceId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          invoiceId: invoiceId,
-          status: 'Completed',
-          branchId: invoice?.branchId || 1,
-          customerId: invoice?.customerId || 1,
-          employeeId: 1,
-          totalAmount: invoice?.totalAmount || 0,
-          discountAmount: invoice?.discountAmount || 0,
-          finalAmount: invoice?.finalAmount || 0,
-          paymentMethod: invoice?.paymentMethod || 'CASH'
-        })
+      setCompleting(true)
+      await apiPut(`/invoices/${order.invoiceId}/status`, { status: "paid" })
+      
+      // Reload order to get updated status
+      await loadOrder()
+      
+      toast({
+        title: "Thành công",
+        description: "Đơn hàng đã thanh toán và hoàn thành"
       })
-      if (response.ok) {
-        alert('Đơn hàng đã hoàn thành')
-        loadInvoice() // Reload to get updated status
-      } else {
-        alert('Lỗi khi hoàn thành đơn hàng')
-      }
     } catch (err) {
       console.error("Error completing order:", err)
-      alert('Lỗi khi hoàn thành đơn hàng')
+      toast({
+        title: "Lỗi",
+        description: "Không thể thanh toán đơn hàng",
+        variant: "destructive"
+      })
+    } finally {
+      setCompleting(false)
     }
   }
 
+  const handleCancelOrder = async () => {
+    if (!order) return
+    try {
+      setCancelling(true)
+      await apiPut(`/invoices/${order.invoiceId}/status`, { status: "cancelled" })
+      
+      // Reload order to get updated status
+      await loadOrder()
+      
+      toast({
+        title: "Thành công",
+        description: "Đơn hàng đã được hủy"
+      })
+    } catch (err) {
+      console.error("Error cancelling order:", err)
+      toast({
+        title: "Lỗi",
+        description: "Không thể hủy đơn hàng",
+        variant: "destructive"
+      })
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  const handlePrint = () => {
+    window.open(`/sales/orders/${order?.invoiceId}/print`, '_blank')
+  }
+
   const getStatusBadge = (status?: string) => {
-    const config: Record<string, { label: string; class: string }> = {
-      completed: { label: "Hoàn thành", class: "bg-green-100 text-green-800" },
-      pending: { label: "Chờ xử lý", class: "bg-orange-100 text-orange-800" },
-      processing: { label: "Đang xử lý", class: "bg-blue-100 text-blue-800" },
-      cancelled: { label: "Đã hủy", class: "bg-red-100 text-red-800" },
+    const config: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+      pending: { label: "Chờ xử lý", variant: "secondary" },
+      processing: { label: "Đang xử lý", variant: "outline" },
+      paid: { label: "Đã thanh toán & Hoàn thành", variant: "default" },
+      cancelled: { label: "Đã hủy", variant: "destructive" },
     }
     const s = (status ?? "pending").toLowerCase()
-    const cfg = config[s] ?? { label: status, class: "bg-gray-100 text-gray-800" }
-    return <span className={`text-xs px-2 py-1 rounded font-medium ${cfg.class}`}>{cfg.label}</span>
+    const cfg = config[s] ?? { label: status, variant: "outline" }
+    return <Badge variant={cfg.variant}>{cfg.label}</Badge>
   }
 
   if (loading) {
@@ -167,7 +175,7 @@ export default function InvoiceDetailPage() {
     )
   }
 
-  if (error || !invoice) {
+  if (error || !order) {
     return (
       <div className="min-h-screen bg-muted/30">
         <header className="border-b bg-background">
@@ -191,9 +199,7 @@ export default function InvoiceDetailPage() {
     )
   }
 
-  const date = invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('vi-VN') : 'N/A'
-  const customer = invoice.customerName || 'N/A'
-  const phone = invoice.customerPhone || 'N/A'
+  const date = order.invoiceDate ? new Date(order.invoiceDate).toLocaleDateString('vi-VN') : 'N/A'
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -203,15 +209,8 @@ export default function InvoiceDetailPage() {
             <Button variant="ghost" size="icon" onClick={() => router.back()}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div className="flex items-center gap-2">
-              <PawPrint className="h-6 w-6 text-primary" />
-              <span className="font-bold">Chi tiết hóa đơn</span>
-            </div>
+            <h1 className="font-bold text-xl">Chi tiết hóa đơn</h1>
           </div>
-          <Button onClick={() => window.open(`/sales/orders/${invoiceId}/print`, '_blank')}>
-            <Printer className="h-4 w-4 mr-2" />
-            In hóa đơn
-          </Button>
         </div>
       </header>
 
@@ -224,11 +223,11 @@ export default function InvoiceDetailPage() {
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <div>
-                    <CardTitle className="font-mono text-2xl mb-2">ĐH{invoiceId}</CardTitle>
+                    <CardTitle className="font-mono text-2xl mb-2">ĐH{order.invoiceId}</CardTitle>
                     <p className="text-sm text-muted-foreground">{date}</p>
                   </div>
                   <div className="text-right">
-                    {getStatusBadge(invoice.status)}
+                    {getStatusBadge(order.status)}
                   </div>
                 </div>
               </CardHeader>
@@ -239,18 +238,22 @@ export default function InvoiceDetailPage() {
               <CardHeader>
                 <CardTitle>Thông tin khách hàng</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-3">
                 <div>
                   <p className="text-sm text-muted-foreground">Tên khách hàng</p>
-                  <p className="font-medium">{customer}</p>
+                  <p className="font-medium">{order.customerName || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Số điện thoại</p>
-                  <p className="font-medium">{phone}</p>
+                  <p className="font-medium">{order.customerPhone || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Email</p>
+                  <p className="font-medium">{order.customerEmail || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Chi nhánh</p>
-                  <p className="font-medium">{invoice.branchName || 'N/A'}</p>
+                  <p className="font-medium">{order.branchName || 'N/A'}</p>
                 </div>
               </CardContent>
             </Card>
@@ -272,23 +275,16 @@ export default function InvoiceDetailPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {invoice.items && invoice.items.length > 0 ? (
-                        invoice.items.map((item, idx) => {
-                          let itemName = 'Đang tải...'
-                          if (item.itemType === 'PRODUCT') {
-                            itemName = item.productName || `Sản phẩm #${item.productId}`
-                          } else if (item.itemType === 'SERVICE') {
-                            itemName = item.serviceName || `Dịch vụ #${item.serviceId}`
-                          } else {
-                            itemName = item.productName ? `${item.productName}` : (item.serviceName ? `${item.serviceName}` : `Mục #${item.productId || item.serviceId}`)
-                          }
+                      {order.items && order.items.length > 0 ? (
+                        order.items.map((item, idx) => {
+                          const itemName = item.productName || item.serviceName || `Mục #${item.invoiceItemId}`
                           return (
                             <tr key={idx} className="border-b">
                               <td className="py-2">{itemName}</td>
                               <td className="text-right">{item.quantity || 0}</td>
                               <td className="text-right">{(item.unitPrice || 0).toLocaleString()}đ</td>
                               <td className="text-right font-medium">
-                                {((item.quantity || 0) * (item.unitPrice || 0)).toLocaleString()}đ
+                                {(item.totalPrice || 0).toLocaleString()}đ
                               </td>
                             </tr>
                           )
@@ -305,6 +301,18 @@ export default function InvoiceDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Ghi chú */}
+            {order.notes && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Ghi chú</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm whitespace-pre-wrap">{order.notes}</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Tóm tắt */}
@@ -316,60 +324,81 @@ export default function InvoiceDetailPage() {
               <CardContent className="space-y-4">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Tổng tiền:</span>
-                  <span className="font-medium">{(invoice.totalAmount || 0).toLocaleString()}đ</span>
+                  <span className="font-medium">{(order.totalAmount || 0).toLocaleString()}đ</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Giảm giá:</span>
-                  <span className="font-medium">-{(invoice.discountAmount || 0).toLocaleString()}đ</span>
-                </div>
+                {order.discountAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Giảm giá:</span>
+                    <span className="font-medium">-{(order.discountAmount || 0).toLocaleString()}đ</span>
+                  </div>
+                )}
                 <div className="border-t pt-4 flex justify-between text-lg">
                   <span className="font-semibold">Tổng thanh toán:</span>
-                  <span className="font-bold text-primary">{(invoice.finalAmount || 0).toLocaleString()}đ</span>
+                  <span className="font-bold text-primary">{(order.finalAmount || order.totalAmount || 0).toLocaleString()}đ</span>
                 </div>
 
                 <div className="pt-4 border-t">
                   <p className="text-sm text-muted-foreground mb-2">Phương thức thanh toán</p>
-                  <p className="font-medium">{invoice.paymentMethod || 'N/A'}</p>
+                  <p className="font-medium">{order.paymentMethod || 'N/A'}</p>
                 </div>
 
                 <div className="pt-4 border-t">
                   <p className="text-sm text-muted-foreground mb-2">Trạng thái</p>
-                  {getStatusBadge(invoice.status)}
+                  {getStatusBadge(order.status)}
                 </div>
 
                 <div className="pt-4 space-y-2">
-                  {/* Status action buttons */}
-                  {invoice.status?.toLowerCase() === 'pending' && (
-                    <Button 
-                      className="w-full" 
-                      onClick={handleConfirmOrder}
-                    >
-                      Xác nhận đơn hàng
-                    </Button>
+                  {order.status?.toLowerCase() === 'pending' && (
+                    <>
+                      <Button 
+                        onClick={handleConfirmOrder}
+                        disabled={confirming}
+                        className="w-full bg-blue-600 hover:bg-blue-700"
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        {confirming ? "Đang xác nhận..." : "✓ Xác nhận đơn"}
+                      </Button>
+                    </>
                   )}
-                  
-                  {invoice.status?.toLowerCase() === 'processing' && (
+
+                  {order.status?.toLowerCase() === 'processing' && (
+                    <>
+                      <Button 
+                        onClick={handleCompleteOrder}
+                        disabled={completing}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        {completing ? "Đang thanh toán..." : "✓ Thanh toán"}
+                      </Button>
+                    </>
+                  )}
+
+                  {(order.status?.toLowerCase() === 'pending' || order.status?.toLowerCase() === 'processing') && (
                     <Button 
-                      className="w-full bg-green-600 hover:bg-green-700" 
-                      onClick={handleCompleteOrder}
+                      onClick={handleCancelOrder}
+                      disabled={cancelling}
+                      variant="destructive"
+                      className="w-full"
                     >
-                      Hoàn thành đơn hàng
+                      {cancelling ? "Đang hủy..." : "✕ Hủy đơn hàng"}
                     </Button>
                   )}
 
-                  {invoice.status?.toLowerCase() === 'completed' && (
-                    <div className="text-center py-2">
-                      <span className="text-sm text-green-600 font-medium">✓ Đơn hàng đã hoàn thành</span>
-                    </div>
-                  )}
-                  
-                  {/* Print and back buttons */}
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1" onClick={() => window.open(`/sales/orders/${invoiceId}/print`, '_blank')}>
+                    <Button 
+                      variant="outline"
+                      onClick={handlePrint}
+                      className="flex-1"
+                    >
                       <Printer className="h-4 w-4 mr-2" />
-                      In hóa đơn
+                      In
                     </Button>
-                    <Button variant="outline" className="flex-1" onClick={() => router.back()}>
+                    <Button 
+                      variant="outline"
+                      onClick={() => router.back()}
+                      className="flex-1"
+                    >
                       Quay lại
                     </Button>
                   </div>

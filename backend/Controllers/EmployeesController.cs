@@ -33,12 +33,20 @@ public class EmployeesController : ControllerBase
     }
 
     /// <summary>
-    /// Returns all employees.
+    /// Returns employees, optionally filtered by branch.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<EmployeeDto>>> Get()
+    public async Task<ActionResult<IEnumerable<EmployeeDto>>> Get([FromQuery] int? branchId = null)
     {
-        var list = await _context.Employees.ToListAsync();
+        var q = _context.Employees.AsQueryable();
+        
+        // Filter by branch if provided
+        if (branchId.HasValue)
+        {
+            q = q.Where(e => e.BranchId == branchId.Value);
+        }
+        
+        var list = await q.ToListAsync();
         return _mapper.Map<List<EmployeeDto>>(list);
     }
 
@@ -150,31 +158,85 @@ public class EmployeesController : ControllerBase
     {
         var results = new List<DoctorScheduleDto>();
         
-        using (var command = _context.Database.GetDbConnection().CreateCommand())
+        try
         {
-            command.CommandText = "usp_GetDoctorScheduleByDate";
-            command.CommandType = CommandType.StoredProcedure;
-            
-            command.Parameters.Add(new SqlParameter("@DoctorID", id));
-            command.Parameters.Add(new SqlParameter("@Date", date.Date));
-            
-            await _context.Database.OpenConnectionAsync();
-            
-            using (var reader = await command.ExecuteReaderAsync())
+            using (var command = _context.Database.GetDbConnection().CreateCommand())
             {
-                while (await reader.ReadAsync())
+                command.CommandText = "usp_GetDoctorScheduleByDate";
+                command.CommandType = CommandType.StoredProcedure;
+                
+                command.Parameters.Add(new SqlParameter("@DoctorID", id));
+                command.Parameters.Add(new SqlParameter("@Date", date.Date));
+                
+                await _context.Database.OpenConnectionAsync();
+                
+                using (var reader = await command.ExecuteReaderAsync())
                 {
-                    results.Add(new DoctorScheduleDto
+                    while (await reader.ReadAsync())
                     {
-                        AppointmentTime = reader.GetDateTime(0),
-                        PetName = reader.GetString(1),
-                        Activity = reader.GetString(2)
-                    });
+                        results.Add(new DoctorScheduleDto
+                        {
+                            AppointmentTime = reader.GetDateTime(0),
+                            PetName = reader.GetString(1),
+                            Activity = reader.GetString(2)
+                        });
+                    }
                 }
             }
         }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message, innerException = ex.InnerException?.Message });
+        }
         
         return results;
+    }
+
+    /// <summary>
+    /// Debug endpoint to check doctor's all schedule records.
+    /// </summary>
+    [HttpGet("{id}/schedule-all")]
+    public async Task<ActionResult> GetDoctorScheduleAll(int id)
+    {
+        try
+        {
+            var checkHealthRecords = await _context.CheckHealths
+                .Where(ch => ch.DoctorId == id)
+                .Include(ch => ch.Pet)
+                .Select(ch => new
+                {
+                    Type = "Examination",
+                    DoctorID = ch.DoctorId,
+                    PetName = ch.Pet.Name,
+                    CheckDate = ch.CheckDate
+                })
+                .ToListAsync();
+
+            var vaccineRecords = await _context.VaccineRecords
+                .Where(vr => vr.DoctorId == id)
+                .Include(vr => vr.Pet)
+                .Select(vr => new
+                {
+                    Type = "Vaccination",
+                    DoctorID = vr.DoctorId,
+                    PetName = vr.Pet.Name,
+                    DateAdministered = vr.DateAdministered
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                doctorId = id,
+                totalCheckHealth = checkHealthRecords.Count,
+                totalVaccineRecords = vaccineRecords.Count,
+                checkHealthRecords = checkHealthRecords.Take(10),
+                vaccineRecords = vaccineRecords.Take(10)
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 }
 

@@ -89,6 +89,16 @@ public class BookingExtendedController : ControllerBase
                 command.Parameters.Add(new SqlParameter("@BookingDate", request.BookingDate));
                 command.Parameters.Add(new SqlParameter("@BookingType", request.BookingType));
                 
+                // Add optional BranchID parameter
+                if (request.BranchId.HasValue)
+                {
+                    command.Parameters.Add(new SqlParameter("@BranchID", request.BranchId.Value));
+                }
+                else
+                {
+                    command.Parameters.Add(new SqlParameter("@BranchID", DBNull.Value));
+                }
+                
                 await _context.Database.OpenConnectionAsync();
                 
                 using (var reader = await command.ExecuteReaderAsync())
@@ -145,6 +155,8 @@ public class CreateBookingByCustomerDto
     /// Booking type: 'CheckHealth' or 'Vaccination'
     /// </summary>
     public string BookingType { get; set; } = string.Empty;
+    /// <summary>Optional: Branch ID where booking should be created. If not provided, uses customer's last invoiced branch.</summary>
+    public int? BranchId { get; set; }
 }
 
 /// <summary>

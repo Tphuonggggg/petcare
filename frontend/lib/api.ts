@@ -3,10 +3,10 @@
 import * as mock from './mockApi'
 
 function useMocks(): boolean {
-  // FORCE DISABLE MOCKS - Always use real backend
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    console.log('🔧 Using real backend API:', process.env.NEXT_PUBLIC_API_URL)
-    return false
+  // Check NEXT_PUBLIC_USE_MOCKS first
+  if ((process.env as any).NEXT_PUBLIC_USE_MOCKS === 'true') {
+    console.log('⚠️ NEXT_PUBLIC_USE_MOCKS is true - using mock data')
+    return true
   }
   
   try {
@@ -18,7 +18,13 @@ function useMocks(): boolean {
       }
     }
   } catch {}
-  if ((process.env as any).NEXT_PUBLIC_USE_MOCKS === 'true') return true
+  
+  // Only use real backend if no mock flags are set
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    console.log('🔧 Using real backend API:', process.env.NEXT_PUBLIC_API_URL)
+    return false
+  }
+  
   return false
 }
 

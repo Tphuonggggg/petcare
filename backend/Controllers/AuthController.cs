@@ -66,7 +66,7 @@ public class AuthController : ControllerBase
                                 DisplayName = reader.GetString(3),
                                 EmployeeId = reader.IsDBNull(4) ? null : reader.GetInt32(4),
                                 CustomerId = reader.IsDBNull(5) ? null : reader.GetInt32(5),
-                                BranchId = reader.GetInt32(6),
+                                BranchId = reader.IsDBNull(6) ? null : reader.GetInt32(6),
                                 PositionId = reader.IsDBNull(7) ? null : reader.GetInt32(7),
                                 Token = GenerateToken(request.Username) // Generate simple JWT if needed
                             };

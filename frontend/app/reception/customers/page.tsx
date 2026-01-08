@@ -144,7 +144,7 @@ export default function ReceptionCustomersPage() {
         params.append('tier', selectedTier)
       }
 
-      const result = await apiGet(`/ReceptionistDashboard/customers?${params.toString()}`)
+      const result = await apiGet(`/receptionistdashboard/customers?${params.toString()}`)
       
       // Only update state if this request wasn't aborted
       if (!abortControllerRef.current.signal.aborted) {

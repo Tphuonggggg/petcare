@@ -46,4 +46,19 @@ public class InvoiceItemDto
     /// <summary>Service name (if item is a service).</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public string? ServiceName { get; set; }
-}
+
+    /// <summary>Product category.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string? Category { get; set; }
+
+    /// <summary>Product description.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string? Description { get; set; }
+
+    /// <summary>Product price.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public decimal? Price { get; set; }
+
+    /// <summary>Product stock quantity.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? StockQty { get; set; }}

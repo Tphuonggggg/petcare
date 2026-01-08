@@ -20,7 +20,7 @@ interface LoginResponse {
   displayName: string
   employeeId?: number
   customerId?: number
-  branchId: number
+  branchId?: number
   positionId?: number
   token: string
 }
@@ -30,6 +30,7 @@ const DEMO_ACCOUNTS = [
   { username: "phamkhanhvy10", password: "123456", role: "Nhân viên tiếp tân", position: "Receptionist" },
   { username: "dothithinh16", password: "123456", role: "Nhân viên bán hàng", position: "Sales" },
   { username: "levantuan1", password: "123456", role: "Quản lý chi nhánh", position: "Admin" },
+  { username: "0900000001", password: "123456", role: "Khách hàng demo (dữ liệu thật)", position: "Customer" },
 ]
 
 export default function LoginPage() {
@@ -87,9 +88,14 @@ export default function LoginPage() {
         employeeId: data.employeeId,
         customerId: data.customerId,
         positionId: data.positionId,
+        branchId: data.branchId,
       }))
       localStorage.setItem("token", data.token)
-      localStorage.setItem("branchId", data.branchId.toString())
+      
+      // Store branchId if exists (employees only)
+      if (data.branchId) {
+        localStorage.setItem("branchId", data.branchId.toString())
+      }
       
       // Store employeeId separately for easy access
       if (data.employeeId) {

@@ -32,7 +32,7 @@ export default function BookingHistoryPage() {
     try {
       setLoading(true)
       const data = await apiGet(
-        `/ReceptionistDashboard/today-bookings?date=${currentDate.toISOString()}`
+        `/receptionistdashboard/today-bookings?date=${currentDate.toISOString()}`
       )
       setBookings(data || [])
     } catch (error) {

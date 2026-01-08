@@ -58,9 +58,9 @@ public class LoginResponseDto
     public int? CustomerId { get; set; }
 
     /// <summary>
-    /// Branch ID where the employee works
+    /// Branch ID where the employee works (nullable for customer accounts)
     /// </summary>
-    public int BranchId { get; set; }
+    public int? BranchId { get; set; }
 
     /// <summary>
     /// Position ID used for role-based routing (1=Doctor, 2=Receptionist, 3=Sales, 4=Manager)

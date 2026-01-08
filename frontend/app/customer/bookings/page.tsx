@@ -4,54 +4,17 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { PawPrint, ArrowLeft, Plus, Calendar } from "lucide-react"
+import { PawPrint, ArrowLeft, Plus, Calendar, Clock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-const mockBookings = [
-  {
-    id: 1,
-    service: "Khám sức khỏe định kỳ",
-    pet: "Max - Chó Golden Retriever",
-    date: "15/01/2025",
-    time: "10:00 AM",
-    branch: "PetCare Quận 1",
-    doctor: "BS. Nguyễn Văn A",
-    status: "confirmed",
-    price: 200000,
-  },
-  {
-    id: 2,
-    service: "Spa & Grooming",
-    pet: "Luna - Mèo Ba Tư",
-    date: "18/01/2025",
-    time: "2:00 PM",
-    branch: "PetCare Quận 3",
-    doctor: "NV. Trần Thị B",
-    status: "pending",
-    price: 150000,
-  },
-]
-
-const pastBookings = [
-  {
-    id: 3,
-    service: "Tiêm phòng dại",
-    pet: "Max - Chó Golden Retriever",
-    date: "10/12/2024",
-    time: "3:00 PM",
-    branch: "PetCare Quận 1",
-    doctor: "BS. Lê Văn C",
-    status: "completed",
-    price: 100000,
-  },
-]
+// Xóa mockBookings, pastBookings
 
 export default function CustomerBookingsPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("upcoming")
-  const [bookings, setBookings] = useState<any[]>(mockBookings)
-  const [past, setPast] = useState<any[]>(pastBookings)
+  const [bookings, setBookings] = useState<any[]>([])
+  const [past, setPast] = useState<any[]>([])
 
   useEffect(() => {
     async function load() {
@@ -61,15 +24,15 @@ export default function CustomerBookingsPage() {
         const user = JSON.parse(userData)
         const { apiGet } = await import('@/lib/api')
         const all = await apiGet('/bookings')
-        if (Array.isArray(all)) {
-          const my = all.filter((b: any) => b.customerId === user.id || b.customerId === user.customerId || b.customerId === user.CustomerId)
-          const upcoming = my.filter((b: any) => (new Date(b.requestedDateTime)) >= new Date())
-          const pastList = my.filter((b: any) => (new Date(b.requestedDateTime)) < new Date())
-          setBookings(upcoming.length ? upcoming : mockBookings)
-          setPast(pastList.length ? pastList : pastBookings)
-        }
+        let arr = Array.isArray(all) ? all : (all?.items || [])
+        const my = arr.filter((b: any) => Number(b.customerId) === Number(user.customerId || user.id || user.CustomerId))
+        const now = new Date()
+        const upcoming = my.filter((b: any) => new Date(b.requestedDateTime || b.date) >= now)
+        const pastList = my.filter((b: any) => new Date(b.requestedDateTime || b.date) < now)
+        setBookings(upcoming)
+        setPast(pastList)
       } catch (e) {
-        // ignore, keep mocks
+        // ignore
       }
     }
     load()
@@ -80,8 +43,15 @@ export default function CustomerBookingsPage() {
       confirmed: { label: "Đã xác nhận", variant: "default" as const },
       pending: { label: "Chờ xác nhận", variant: "secondary" as const },
       completed: { label: "Hoàn thành", variant: "outline" as const },
+      cancelled: { label: "Đã hủy", variant: "destructive" as const },
+      canceled: { label: "Đã hủy", variant: "destructive" as const },
+      rejected: { label: "Từ chối", variant: "destructive" as const },
+      inprogress: { label: "Đang thực hiện", variant: "default" as const },
+      processing: { label: "Đang xử lý", variant: "default" as const },
+      new: { label: "Mới", variant: "secondary" as const },
     }
-    const config = variants[status as keyof typeof variants]
+    const config = variants[(status || '').toLowerCase() as keyof typeof variants]
+    if (!config) return <Badge variant="secondary">Không rõ</Badge>
     return <Badge variant={config.variant}>{config.label}</Badge>
   }
 
@@ -110,10 +80,16 @@ export default function CustomerBookingsPage() {
             <h1 className="text-3xl font-bold mb-2">Lịch hẹn của tôi</h1>
             <p className="text-muted-foreground">Quản lý và theo dõi lịch hẹn</p>
           </div>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Đặt lịch mới
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => router.push("/customer/doctor-schedules")}>
+              <Clock className="h-4 w-4 mr-2" />
+              Xem lịch bác sĩ
+            </Button>
+            <Button onClick={() => router.push("/customer/bookings/create")}>
+              <Plus className="h-4 w-4 mr-2" />
+              Đặt lịch mới
+            </Button>
+          </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -124,12 +100,12 @@ export default function CustomerBookingsPage() {
 
           <TabsContent value="upcoming" className="space-y-4">
             {bookings.map((booking) => (
-              <Card key={booking.id}>
+              <Card key={booking.bookingId ?? booking.id}>
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div>
-                      <CardTitle className="text-xl mb-1">{booking.service}</CardTitle>
-                      <p className="text-muted-foreground">{booking.pet}</p>
+                      <CardTitle className="text-xl mb-1">{booking.serviceName ?? booking.title ?? booking.bookingType ?? '-'}</CardTitle>
+                      <p className="text-muted-foreground">{booking.petName ?? booking.pet?.name ?? '-'}</p>
                     </div>
                     {getStatusBadge(booking.status)}
                   </div>
@@ -140,25 +116,28 @@ export default function CustomerBookingsPage() {
                       <div className="flex items-center gap-2 text-sm">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
                         <span>
-                          {booking.date} - {booking.time}
+                          {(booking.requestedDateTime ? new Date(booking.requestedDateTime).toLocaleString() : (booking.date ? new Date(booking.date).toLocaleString() : '-'))}
                         </span>
                       </div>
                       <div className="text-sm">
-                        <span className="text-muted-foreground">Chi nhánh:</span> {booking.branch}
+                        <span className="text-muted-foreground">Chi nhánh:</span> {booking.branchName ?? booking.branch?.name ?? booking.branchId ?? '-'}
                       </div>
                       <div className="text-sm">
-                        <span className="text-muted-foreground">Bác sĩ:</span> {booking.doctor}
+                        <span className="text-muted-foreground">Bác sĩ:</span> {booking.doctorName ?? booking.doctor ?? '-'}
+                      </div>
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">Ghi chú:</span> {booking.notes ?? '-'}
                       </div>
                     </div>
                     <div className="flex items-end justify-end">
                       <div className="text-right">
                         <p className="text-sm text-muted-foreground">Giá dịch vụ</p>
-                        <p className="text-2xl font-bold text-primary">{booking.price.toLocaleString()}đ</p>
+                        <p className="text-2xl font-bold text-primary">{booking.price ? booking.price.toLocaleString() + 'đ' : '-'}</p>
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 bg-transparent">
+                    <Button variant="outline" className="flex-1 bg-transparent" onClick={() => router.push(`/customer/bookings/${booking.bookingId ?? booking.id}`)}>
                       Xem chi tiết
                     </Button>
                     <Button variant="outline" className="flex-1 bg-transparent">
@@ -172,12 +151,12 @@ export default function CustomerBookingsPage() {
 
           <TabsContent value="past" className="space-y-4">
             {past.map((booking) => (
-              <Card key={booking.id}>
+              <Card key={booking.bookingId ?? booking.id}>
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div>
-                      <CardTitle className="text-xl mb-1">{booking.service}</CardTitle>
-                      <p className="text-muted-foreground">{booking.pet}</p>
+                      <CardTitle className="text-xl mb-1">{booking.serviceName ?? booking.title ?? booking.bookingType ?? '-'}</CardTitle>
+                      <p className="text-muted-foreground">{booking.petName ?? booking.pet?.name ?? '-'}</p>
                     </div>
                     {getStatusBadge(booking.status)}
                   </div>
@@ -188,25 +167,28 @@ export default function CustomerBookingsPage() {
                       <div className="flex items-center gap-2 text-sm">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
                         <span>
-                          {booking.date} - {booking.time}
+                          {(booking.requestedDateTime ? new Date(booking.requestedDateTime).toLocaleString() : (booking.date ? new Date(booking.date).toLocaleString() : '-'))}
                         </span>
                       </div>
                       <div className="text-sm">
-                        <span className="text-muted-foreground">Chi nhánh:</span> {booking.branch}
+                        <span className="text-muted-foreground">Chi nhánh:</span> {booking.branchName ?? booking.branch?.name ?? booking.branchId ?? '-'}
                       </div>
                       <div className="text-sm">
-                        <span className="text-muted-foreground">Bác sĩ:</span> {booking.doctor}
+                        <span className="text-muted-foreground">Bác sĩ:</span> {booking.doctorName ?? '-'}
+                      </div>
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">Ghi chú:</span> {booking.notes ?? '-'}
                       </div>
                     </div>
                     <div className="flex items-end justify-end">
                       <div className="text-right">
                         <p className="text-sm text-muted-foreground">Đã thanh toán</p>
-                        <p className="text-2xl font-bold">{booking.price.toLocaleString()}đ</p>
+                        <p className="text-2xl font-bold">{booking.price ? booking.price.toLocaleString() + 'đ' : '-'}</p>
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 bg-transparent">
+                    <Button variant="outline" className="flex-1 bg-transparent" onClick={() => router.push(`/customer/bookings/${booking.bookingId ?? booking.id}`)}>
                       Xem chi tiết
                     </Button>
                     <Button variant="outline" className="flex-1 bg-transparent">

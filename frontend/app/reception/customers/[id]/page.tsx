@@ -75,7 +75,7 @@ export default function CustomerDetailPage() {
 
       // Load all bookings and filter by customer name
       try {
-        const allBookings = await apiGet("/ReceptionistDashboard/today-bookings")
+        const allBookings = await apiGet("/receptionistdashboard/today-bookings")
         const customerBookings = allBookings.filter(
           (b: Booking) => b.customerName === data.fullName
         )

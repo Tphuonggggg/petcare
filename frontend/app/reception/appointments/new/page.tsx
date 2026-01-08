@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, Calendar, Users, Clock, X } from "lucide-react"
@@ -20,51 +20,138 @@ interface Pet {
 
 interface Service {
   serviceId: number
-  serviceName: string
+  name: string
+  serviceType?: string
+  basePrice?: number
+  description?: string
+}
+
+interface Doctor {
+  employeeId: number
+  fullName: string
 }
 
 export default function NewAppointmentPage() {
   const router = useRouter()
-  const [customers, setCustomers] = useState<Customer[]>([])
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([])
   const [pets, setPets] = useState<Pet[]>([])
   const [services, setServices] = useState<Service[]>([])
+  const [doctors, setDoctors] = useState<Doctor[]>([])
   const [customerSearch, setCustomerSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [selectedPetId, setSelectedPetId] = useState("")
   const [selectedService, setSelectedService] = useState("")
+  const [selectedDoctorId, setSelectedDoctorId] = useState("")
   const [appointmentDate, setAppointmentDate] = useState("")
   const [appointmentTime, setAppointmentTime] = useState("")
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const [searchingCustomers, setSearchingCustomers] = useState(false)
+  
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     loadFormData()
   }, [])
 
+  // Debounce search input
+  useEffect(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current)
+    }
+
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedSearch(customerSearch)
+    }, 500)
+
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current)
+      }
+    }
+  }, [customerSearch])
+
+  // Load customers when debounced search changes
+  useEffect(() => {
+    if (debouncedSearch.trim()) {
+      searchCustomers(debouncedSearch)
+    } else {
+      setFilteredCustomers([])
+      setShowCustomerDropdown(false)
+    }
+  }, [debouncedSearch])
+
   const loadFormData = async () => {
     try {
       setLoading(true)
-      const [customersData, servicesData] = await Promise.all([
-        apiGet("/customers?page=1&pageSize=100"),
+      
+      // Get branchId from localStorage
+      let branchId = localStorage.getItem("branchId")
+      
+      if (!branchId) {
+        const employeeId = localStorage.getItem("employeeId")
+        if (employeeId) {
+          try {
+            const empData = await apiGet(`/employees/${employeeId}`)
+            branchId = empData.branchId?.toString()
+            if (branchId) {
+              localStorage.setItem("branchId", branchId)
+            }
+          } catch (error) {
+            console.error("Error loading employee info:", error)
+          }
+        }
+      }
+      
+      const [servicesData, doctorsData] = await Promise.all([
         apiGet("/services?page=1&pageSize=100"),
+        apiGet(`/employees?positionId=1&branchId=${branchId}&page=1&pageSize=100`)
       ])
-      console.log("Full Customers Response:", JSON.stringify(customersData, null, 2))
-      console.log("Full Services Response:", JSON.stringify(servicesData, null, 2))
       
-      const customersList = customersData?.items || customersData || []
       const servicesList = servicesData?.items || servicesData || []
+      const doctorsList = doctorsData?.items || doctorsData || []
       
-      console.log("Customers set to:", customersList)
-      console.log("Services set to:", servicesList)
-      
-      setCustomers(Array.isArray(customersList) ? customersList : [])
       setServices(Array.isArray(servicesList) ? servicesList : [])
+      setDoctors(Array.isArray(doctorsList) ? doctorsList : [])
     } catch (error) {
       console.error("Error loading form data:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const searchCustomers = async (searchText: string) => {
+    try {
+      setSearchingCustomers(true)
+      
+      // Cancel previous request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+      abortControllerRef.current = new AbortController()
+
+      const params = new URLSearchParams({
+        page: '1',
+        pageSize: '20',
+        search: searchText.trim()
+      })
+
+      const result = await apiGet(`/receptionistdashboard/customers?${params.toString()}`)
+      
+      if (!abortControllerRef.current.signal.aborted) {
+        const customersList = result?.items || []
+        setFilteredCustomers(customersList)
+        setShowCustomerDropdown(customersList.length > 0)
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error("Error searching customers:", error)
+      }
+    } finally {
+      setSearchingCustomers(false)
     }
   }
 
@@ -82,24 +169,11 @@ export default function NewAppointmentPage() {
     }
   }
 
-  const handleCustomerSearch = (searchText: string) => {
-    setCustomerSearch(searchText)
-    if (searchText.trim()) {
-      const filtered = customers.filter((customer) =>
-        customer.fullName.toLowerCase().includes(searchText.toLowerCase())
-      )
-      setFilteredCustomers(filtered)
-      setShowCustomerDropdown(true)
-    } else {
-      setFilteredCustomers([])
-      setShowCustomerDropdown(false)
-    }
-  }
-
   const handleSelectCustomer = (customer: Customer) => {
     setSelectedCustomer(customer)
     setCustomerSearch(customer.fullName)
     setShowCustomerDropdown(false)
+    setFilteredCustomers([])
     setSelectedPetId("")
     loadPets(customer.customerId)
   }
@@ -121,17 +195,54 @@ export default function NewAppointmentPage() {
     try {
       setSubmitting(true)
       const bookingDateTime = new Date(`${appointmentDate}T${appointmentTime}`)
+      const branchId = typeof window !== 'undefined' ? localStorage.getItem('branchId') : null
       
-      await apiPost("/bookings", {
+      console.log("[DEBUG] branchId from localStorage:", branchId)
+      
+      if (!branchId) {
+        alert("Không tìm thấy thông tin chi nhánh. Vui lòng đăng nhập lại.")
+        return
+      }
+      
+      // Map service name to bookingType
+      const bookingTypeMap: Record<string, string> = {
+        'Khám bệnh': 'CheckHealth',
+        'Tiêm phòng': 'Vaccination',
+        'Gói tiêm phòng': 'Vaccination'
+      }
+      const bookingType = bookingTypeMap[selectedService] || selectedService
+      
+      const bookingData = {
         customerId: selectedCustomer.customerId,
         petId: parseInt(selectedPetId),
-        bookingType: selectedService,
+        branchId: parseInt(branchId),
+        bookingType: bookingType,
         requestedDateTime: bookingDateTime.toISOString(),
         status: "Pending",
-      })
+        doctorId: selectedDoctorId ? parseInt(selectedDoctorId) : null,
+      }
+      
+      console.log("[DEBUG] Booking data being sent:", bookingData)
+      
+      await apiPost("/bookings", bookingData)
 
       alert("Lịch hẹn đã được tạo thành công")
+      // Clear form data
+      setSelectedCustomer(null)
+      setCustomerSearch("")
+      setPets([])
+      setSelectedPetId("")
+      setSelectedService("")
+      setSelectedDoctorId("")
+      setAppointmentDate("")
+      setAppointmentTime("")
+      // Navigate back to appointments list
       router.push("/reception/appointments")
+      
+      // Reload page after short delay to ensure dashboard refreshes
+      setTimeout(() => {
+        router.refresh()
+      }, 500)
     } catch (error) {
       console.error("Error creating booking:", error)
       alert("Lỗi khi tạo lịch hẹn")
@@ -180,10 +291,16 @@ export default function NewAppointmentPage() {
                         type="text"
                         placeholder="Gõ tên khách hàng..."
                         value={customerSearch}
-                        onChange={(e) => handleCustomerSearch(e.target.value)}
-                        onFocus={() => customerSearch && setShowCustomerDropdown(true)}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                        onFocus={() => filteredCustomers.length > 0 && setShowCustomerDropdown(true)}
                         className="w-full border rounded-md px-3 py-2"
+                        disabled={submitting}
                       />
+                      {searchingCustomers && (
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                        </div>
+                      )}
                       {selectedCustomer && (
                         <button
                           type="button"
@@ -242,8 +359,24 @@ export default function NewAppointmentPage() {
                 >
                   <option value="">-- Chọn dịch vụ --</option>
                   {services.map((service) => (
-                    <option key={service.serviceId} value={service.serviceName}>
-                      {service.serviceName}
+                    <option key={service.serviceId} value={service.name}>
+                      {service.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Bác sĩ (tùy chọn)</label>
+                <select
+                  value={selectedDoctorId}
+                  onChange={(e) => setSelectedDoctorId(e.target.value)}
+                  className="w-full border rounded-md px-3 py-2"
+                >
+                  <option value="">-- Tự động gán --</option>
+                  {doctors.map((doctor) => (
+                    <option key={doctor.employeeId} value={doctor.employeeId}>
+                      {doctor.fullName}
                     </option>
                   ))}
                 </select>

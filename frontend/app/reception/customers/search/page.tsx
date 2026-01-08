@@ -35,7 +35,7 @@ export default function SearchCustomerPage() {
     try {
       setLoading(true)
       setSearched(true)
-      const data = await apiGet(`/ReceptionistDashboard/search-customers?query=${encodeURIComponent(searchQuery)}`)
+      const data = await apiGet(`/receptionistdashboard/search-customers?query=${encodeURIComponent(searchQuery)}`)
       setSearchResults(data || [])
     } catch (error) {
       console.error("Error searching customers:", error)

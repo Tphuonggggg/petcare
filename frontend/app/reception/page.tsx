@@ -79,8 +79,11 @@ export default function ReceptionDashboard() {
   const loadEmployeeInfo = async (empId: number) => {
     try {
       const empData = await apiGet(`/employees/${empId}`)
+      console.log("[RECEPTION] Employee data:", empData)
+      console.log("[RECEPTION] BranchId from employee:", empData.branchId)
       setEmployee(empData)
       setBranchId(empData.branchId)
+      localStorage.setItem('branchId', empData.branchId?.toString())
       loadBranches()
     } catch (error) {
       console.error("Error loading employee info:", error)
@@ -92,6 +95,13 @@ export default function ReceptionDashboard() {
   useEffect(() => {
     if (branchId) {
       loadDashboardData()
+      
+      // Auto-refresh dashboard every 30 seconds
+      const interval = setInterval(() => {
+        loadDashboardData()
+      }, 30000)
+      
+      return () => clearInterval(interval)
     }
   }, [branchId])
 
@@ -107,16 +117,19 @@ export default function ReceptionDashboard() {
   const loadDashboardData = async () => {
     try {
       setRefreshing(true)
+      console.log("[DASHBOARD] Loading data for branchId:", branchId)
       const [summaryData, bookingsData, waitingData] = await Promise.all([
-        apiGet(`/ReceptionistDashboard/summary?branchId=${branchId}`),
-        apiGet(`/ReceptionistDashboard/today-bookings?branchId=${branchId}`),
-        apiGet(`/ReceptionistDashboard/waiting-customers?branchId=${branchId}`).catch(() => []),
+        apiGet(`/receptionistdashboard/summary?branchId=${branchId}`),
+        apiGet(`/receptionistdashboard/today-bookings?branchId=${branchId}`),
+        apiGet(`/receptionistdashboard/waiting-customers?branchId=${branchId}`).catch(() => []),
       ])
+      console.log("[DASHBOARD] Bookings data received:", bookingsData)
+      console.log("[DASHBOARD] Bookings count:", bookingsData?.length || 0)
       setSummary(summaryData)
       setTodayAppointments(bookingsData || [])
       setWaitingCustomers(waitingData || [])
     } catch (error) {
-      console.error("Error loading dashboard data:", error)
+      console.error("[DASHBOARD] Error loading dashboard data:", error)
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -126,7 +139,7 @@ export default function ReceptionDashboard() {
   const handleCheckIn = async (bookingId: number) => {
     try {
       const employeeId = 1 // TODO: Get from auth context
-      await apiPost(`/ReceptionistDashboard/check-in/${bookingId}`, { employeeId })
+      await apiPost(`/receptionistdashboard/check-in/${bookingId}`, { employeeId })
       alert("Check-in thành công!")
       loadDashboardData()
     } catch (error) {
@@ -298,7 +311,7 @@ export default function ReceptionDashboard() {
                     Không có lịch hẹn nào hôm nay
                   </div>
                 ) : (
-                  todayAppointments.slice(0, 4).map((appointment) => (
+                  todayAppointments.slice(0, 5).map((appointment) => (
                     <div key={appointment.bookingId} className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50">
                       <div className="font-mono font-bold text-lg min-w-[60px]">{formatTime(appointment.bookingTime)}</div>
                       <div className="flex-1">

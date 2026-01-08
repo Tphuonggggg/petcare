@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PetCareX.Api.Data;
+using PetCareX.Api.Dtos;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -36,11 +37,12 @@ public class ReceptionistDashboardController : ControllerBase
         var startOfDay = targetDate.Date;
         var endOfDay = startOfDay.AddDays(1);
 
-        // Lấy lịch hẹn trong ngày của chi nhánh này
+        // Lấy lịch hẹn trong ngày của chi nhánh này - filter by branchId directly
         var todayBookings = await _context.Bookings
             .Include(b => b.Customer)
             .Where(b => b.RequestedDateTime >= startOfDay && 
-                       b.RequestedDateTime < endOfDay)
+                       b.RequestedDateTime < endOfDay &&
+                       b.BranchId == branchId)
             .ToListAsync();
 
         // Đếm theo trạng thái
@@ -48,10 +50,13 @@ public class ReceptionistDashboardController : ControllerBase
         var pendingBookings = todayBookings.Count(b => b.Status == "Pending");
         var completedBookings = todayBookings.Count(b => b.Status == "Completed");
 
-        // Đếm khách hàng mới của chi nhánh (đăng ký trong 7 ngày qua)
+        // Đếm khách hàng mới của chi nhánh (có invoice tại chi nhánh trong 7 ngày qua)
         var sevenDaysAgo = DateOnly.FromDateTime(targetDate.AddDays(-7));
-        var newCustomers = await _context.Customers
-            .Where(c => c.MemberSince >= sevenDaysAgo)
+        var newCustomers = await _context.Invoices
+            .Where(i => i.BranchId == branchId && 
+                       i.InvoiceDate >= DateTime.Parse(sevenDaysAgo.ToString()))
+            .Select(i => i.CustomerId)
+            .Distinct()
             .CountAsync();
 
         return new DashboardSummaryDto
@@ -75,27 +80,41 @@ public class ReceptionistDashboardController : ControllerBase
         var targetDate = date ?? DateTime.Today;
         var startOfDay = targetDate.Date;
         var endOfDay = startOfDay.AddDays(1);
+        
+        Console.WriteLine($"[TODAY-BOOKINGS] Query with branchId={branchId}, startOfDay={startOfDay:yyyy-MM-dd HH:mm:ss}, endOfDay={endOfDay:yyyy-MM-dd HH:mm:ss}");
 
+        // Get all today's bookings for this branch - using raw SQL with CAST for date comparison
+        // Note: ORDER BY removed from SQL because subqueries can't have ORDER BY without TOP/OFFSET
         var bookings = await _context.Bookings
+            .FromSqlInterpolated($@"
+                SELECT b.* FROM [Booking] AS b
+                WHERE CAST(b.RequestedDateTime AS DATE) = CAST({startOfDay} AS DATE)
+                AND b.BranchId = {branchId}
+            ")
             .Include(b => b.Customer)
             .Include(b => b.Pet)
-            .Where(b => b.RequestedDateTime >= startOfDay && 
-                       b.RequestedDateTime < endOfDay)
-            .OrderBy(b => b.RequestedDateTime)
-            .Select(b => new BookingDetailDto
-            {
-                BookingId = b.BookingId,
-                BookingTime = b.RequestedDateTime,
-                CustomerName = b.Customer.FullName,
-                PetName = b.Pet.Name,
-                PetType = b.Pet.Species,
-                ServiceType = b.BookingType,
-                Status = b.Status,
-                Notes = b.Notes
-            })
+            .Include(b => b.Doctor)
+            .OrderByDescending(b => b.CreatedAt)
+            .ThenBy(b => b.BookingId)
             .ToListAsync();
 
-        return bookings;
+        Console.WriteLine($"[TODAY-BOOKINGS] Found {bookings.Count} bookings");
+
+        // Map to DTOs
+        var result = bookings.Select(b => new BookingDetailDto
+        {
+            BookingId = b.BookingId,
+            BookingTime = b.RequestedDateTime,
+            CustomerName = b.Customer.FullName,
+            PetName = b.Pet.Name,
+            PetType = b.Pet.Species,
+            ServiceType = b.BookingType,
+            Status = b.Status,
+            DoctorName = b.Doctor?.FullName,
+            Notes = b.Notes
+        }).ToList();
+
+        return result;
     }
 
     /// <summary>
@@ -108,12 +127,20 @@ public class ReceptionistDashboardController : ControllerBase
         var today = DateTime.Today;
         var now = DateTime.Now;
 
+        // Filter by branch through customer invoices
+        var branchCustomerIds = await _context.Invoices
+            .Where(i => i.BranchId == branchId)
+            .Select(i => i.CustomerId)
+            .Distinct()
+            .ToListAsync();
+
         var waitingCustomers = await _context.Bookings
             .Include(b => b.Customer)
             .Include(b => b.Pet)
             .Where(b => b.RequestedDateTime.Date == today && 
                        b.Status == "Pending" &&
-                       b.RequestedDateTime <= now.AddHours(2)) // Trong vòng 2 giờ tới
+                       b.RequestedDateTime <= now.AddHours(2) && // Trong vòng 2 giờ tới
+                       branchCustomerIds.Contains(b.CustomerId))
             .OrderBy(b => b.RequestedDateTime)
             .Select(b => new WaitingCustomerDto
             {
@@ -417,6 +444,109 @@ public class ReceptionistDashboardController : ControllerBase
             TotalPages = (int)Math.Ceiling((double)totalCount / pageSize)
         };
     }
+
+    /// <summary>
+    /// Get all bookings with customer and pet details for management
+    /// </summary>
+    /// <param name="branchId">Branch ID to filter bookings (required)</param>
+    /// <param name="page">Page number (default: 1)</param>
+    /// <param name="pageSize">Items per page (default: 20)</param>
+    /// <param name="status">Optional status filter (Pending, Confirmed, Completed, Cancelled)</param>
+    /// <param name="date">Optional date filter (yyyy-MM-dd format)</param>
+    /// <returns>Paginated list of all bookings with details for the branch</returns>
+    [HttpGet("all-bookings")]
+    public async Task<ActionResult<object>> GetAllBookings(
+        [FromQuery] int branchId, 
+        [FromQuery] int page = 1, 
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? status = null,
+        [FromQuery] string? date = null,
+        [FromQuery] string? search = null)
+    {
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+
+        Console.WriteLine($"[DEBUG] all-bookings called with branchId={branchId}, page={page}, pageSize={pageSize}, search={search}");
+
+        // Filter by BranchId directly (now that bookings have BranchId)
+        var query = _context.Bookings
+            .Include(b => b.Customer)
+            .Include(b => b.Pet)
+            .Where(b => b.BranchId == branchId);
+
+        Console.WriteLine($"[DEBUG] Filtering by branchId={branchId}");
+
+        // Apply search filter if provided
+        if (!string.IsNullOrEmpty(search))
+        {
+            var searchLower = search.ToLower();
+            query = query.Where(b => 
+                b.Customer.FullName.ToLower().Contains(searchLower) ||
+                b.Pet.Name.ToLower().Contains(searchLower));
+            Console.WriteLine($"[DEBUG] Filtering by search: {search}");
+        }
+
+        // Apply status filter if provided
+        if (!string.IsNullOrEmpty(status))
+        {
+            query = query.Where(b => b.Status == status);
+            Console.WriteLine($"[DEBUG] Filtering by status: {status}");
+        }
+
+        // Apply date filter if provided
+        if (!string.IsNullOrEmpty(date) && DateTime.TryParse(date, out var filterDate))
+        {
+            var nextDay = filterDate.AddDays(1);
+            query = query.Where(b => b.RequestedDateTime >= filterDate && b.RequestedDateTime < nextDay);
+            Console.WriteLine($"[DEBUG] Filtering by date: {date}");
+        }
+
+        var totalCount = await query.CountAsync();
+
+        Console.WriteLine($"[DEBUG] Total bookings after filters: {totalCount}");
+
+        // Optimized: Sort in SQL using CASE statements (translatable to SQL)
+        var today = DateTime.Now.Date;
+        var tomorrow = today.AddDays(1);
+        
+        var bookings = await query
+            .OrderBy(b => 
+                b.RequestedDateTime.Date == today ? 0 : // Today = 0
+                b.RequestedDateTime.Date >= tomorrow ? 1 : // Future = 1
+                2) // Past = 2
+            .ThenBy(b => b.RequestedDateTime) // Sort by actual datetime within each group
+            .ThenByDescending(b => b.Status == "Pending" ? 1 : 0) // Pending first
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(b => new BookingDetailDto
+            {
+                BookingId = b.BookingId,
+                BookingTime = b.RequestedDateTime,
+                CustomerName = b.Customer.FullName,
+                PetName = b.Pet.Name,
+                PetType = b.Pet.Species,
+                ServiceType = b.BookingType,
+                Status = b.Status,
+                Notes = b.Notes
+            })
+            .ToListAsync();
+
+        Console.WriteLine($"[DEBUG] Retrieved {bookings.Count} bookings for page {page}");
+        if (bookings.Any())
+        {
+            var dates = bookings.Select(b => b.BookingTime.Date).Distinct().ToList();
+            Console.WriteLine($"[DEBUG] Date diversity: {dates.Count} different dates");
+            Console.WriteLine($"[DEBUG] Date range: {dates.Min():yyyy-MM-dd} to {dates.Max():yyyy-MM-dd}");
+        }
+
+        return Ok(new { 
+            items = bookings, 
+            totalCount = totalCount, 
+            page = page, 
+            pageSize = pageSize,
+            totalPages = (int)Math.Ceiling((double)totalCount / pageSize)
+        });
+    }
 }
 
 #region DTOs
@@ -434,29 +564,6 @@ public class DashboardSummaryDto
     public int CompletedBookings { get; set; }
     /// <summary>New customers (last 7 days)</summary>
     public int NewCustomers { get; set; }
-}
-
-/// <summary>
-/// Detailed booking information.
-/// </summary>
-public class BookingDetailDto
-{
-    /// <summary>Booking ID</summary>
-    public int BookingId { get; set; }
-    /// <summary>Booking time</summary>
-    public DateTime BookingTime { get; set; }
-    /// <summary>Customer name</summary>
-    public string CustomerName { get; set; } = string.Empty;
-    /// <summary>Pet name</summary>
-    public string PetName { get; set; } = string.Empty;
-    /// <summary>Pet type/species</summary>
-    public string PetType { get; set; } = string.Empty;
-    /// <summary>Service type</summary>
-    public string ServiceType { get; set; } = string.Empty;
-    /// <summary>Booking status</summary>
-    public string Status { get; set; } = string.Empty;
-    /// <summary>Additional notes</summary>
-    public string? Notes { get; set; }
 }
 
 /// <summary>

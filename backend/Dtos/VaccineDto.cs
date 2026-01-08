@@ -21,4 +21,7 @@ public class VaccineDto
 
     /// <summary>Standard dose information (optional).</summary>
     public string? StandardDose { get; set; }
+
+    /// <summary>Stock quantity (calculated based on branch batches).</summary>
+    public int? StockQuantity { get; set; }
 }

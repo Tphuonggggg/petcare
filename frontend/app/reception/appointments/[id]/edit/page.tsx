@@ -10,6 +10,9 @@ import { apiGet, apiPut } from "@/lib/api"
 interface Service {
   serviceId: number
   name: string
+  serviceType?: string
+  basePrice?: number
+  description?: string
 }
 
 interface BookingDetail {
@@ -55,7 +58,7 @@ export default function EditAppointmentPage() {
       setLoading(true)
       
       // Load booking detail
-      const allBookings = await apiGet("/ReceptionistDashboard/today-bookings")
+      const allBookings = await apiGet("/receptionistdashboard/today-bookings")
       const bookingData = allBookings.find((b: any) => b.bookingId === Number(id))
       
       if (!bookingData) {

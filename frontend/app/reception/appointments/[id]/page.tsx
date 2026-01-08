@@ -17,6 +17,7 @@ interface BookingDetail {
   petType: string
   serviceType: string
   status: string
+  doctorName?: string
   notes?: string
 }
 
@@ -37,20 +38,14 @@ export default function AppointmentDetailPage() {
   const loadBookingDetail = async () => {
     try {
       setLoading(true)
-      // Fetch from API - sử dụng today-bookings để lấy data đầy đủ với customer info
-      const allBookings = await apiGet("/ReceptionistDashboard/today-bookings")
-      
-      // Tìm booking theo ID
-      const data = allBookings.find((b: any) => b.bookingId === Number(id))
-      
+      // Fetch booking detail trực tiếp theo ID
+        const data = await apiGet(`/bookings/detail/${id}`)
       if (!data) {
         throw new Error("Booking not found")
       }
-      
       // Fetch customer details to get phone and email
       let customerPhone = "N/A"
       let customerEmail = "N/A"
-      
       try {
         // Try to find customer by name
         const customersResponse = await apiGet("/customers?page=1&pageSize=1000")
@@ -68,12 +63,13 @@ export default function AppointmentDetailPage() {
         bookingId: data.bookingId,
         bookingTime: data.bookingTime,
         customerName: data.customerName || "N/A",
-        customerPhone: customerPhone,
-        customerEmail: customerEmail,
+          customerPhone: data.customerPhone,
+          customerEmail: data.customerEmail,
         petName: data.petName || "N/A",
         petType: data.petType || "N/A",
         serviceType: data.serviceType || "N/A",
         status: data.status,
+        doctorName: data.doctorName || undefined,
         notes: data.notes || "",
       }
       
@@ -90,7 +86,7 @@ export default function AppointmentDetailPage() {
 
   const handleStatusChange = async (status: string) => {
     try {
-      await apiPut(`/ReceptionistDashboard/update-booking-status/${id}`, {
+      await apiPut(`/receptionistdashboard/update-booking-status/${id}`, {
         newStatus: status,
       })
       alert("Cập nhật trạng thái thành công")
@@ -255,6 +251,12 @@ export default function AppointmentDetailPage() {
                 <p className="text-sm text-muted-foreground">Dịch vụ</p>
                 <p className="font-medium">{booking.serviceType}</p>
               </div>
+              {booking.doctorName && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Bác sĩ</p>
+                  <p className="font-medium">{booking.doctorName}</p>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <div>

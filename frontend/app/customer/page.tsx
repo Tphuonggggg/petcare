@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, PawPrint, ShoppingCart, User, Heart } from "lucide-react"
+import { Calendar, PawPrint, ShoppingCart, User, Heart, Clock } from "lucide-react"
 
 export default function CustomerDashboard() {
   const router = useRouter()
@@ -30,10 +30,19 @@ export default function CustomerDashboard() {
         const { apiGet } = await import("@/lib/api")
         const [allPetsRes, allBookingsRes] = await Promise.all([apiGet(`/pets`), apiGet(`/bookings`)])
         if (!mounted) return
-        const myPets = Array.isArray(allPetsRes) ? allPetsRes.filter((p: any) => p.customerId === user.id || p.customerId === user.customerId || p.customerId === user.CustomerId) : []
-        const myBookings = Array.isArray(allBookingsRes) ? allBookingsRes.filter((b: any) => b.customerId === user.id || b.customerId === user.customerId || b.customerId === user.CustomerId) : []
-        setPets(myPets.length ? myPets : [])
-        setBookings(myBookings.length ? myBookings : [])
+        let userId = user.customerId || user.id || user.CustomerId;
+        userId = Number(userId); // Đảm bảo là số
+        console.log('userId:', userId, typeof userId);
+        console.log('allBookingsRes:', allBookingsRes);
+        console.log('allPetsRes:', allPetsRes);
+        const petsArr = Array.isArray(allPetsRes?.items) ? allPetsRes.items : [];
+        const bookingsArr = Array.isArray(allBookingsRes?.items) ? allBookingsRes.items : [];
+        const myPets = petsArr.filter((p: any) => Number(p.customerId) === userId);
+        const myBookings = bookingsArr.filter((b: any) => Number(b.customerId) === userId);
+        console.log('myBookings:', myBookings);
+        console.log('myPets:', myPets);
+        setPets(myPets.length ? myPets : []);
+        setBookings(myBookings.length ? myBookings : []);
       } catch (e) {
         // ignore, keep UI defaults
       }
@@ -53,6 +62,13 @@ export default function CustomerDashboard() {
       icon: Calendar,
       href: "/customer/bookings",
       color: "text-blue-600",
+    },
+    {
+      title: "Lịch trình bác sĩ",
+      description: "Xem lịch làm việc của bác sĩ",
+      icon: Clock,
+      href: "/customer/doctor-schedules",
+      color: "text-cyan-600",
     },
     {
       title: "Thú cưng của tôi",
@@ -97,7 +113,7 @@ export default function CustomerDashboard() {
           <p className="text-muted-foreground">Chào mừng bạn đến với PetCare</p>
         </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           {quickActions.map((action) => {
             const Icon = action.icon
             return (
@@ -126,22 +142,27 @@ export default function CustomerDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex justify-between items-start p-4 bg-muted rounded-lg">
-                  <div>
-                    <p className="font-medium">Khám sức khỏe định kỳ</p>
-                    <p className="text-sm text-muted-foreground">Max - Chó Golden Retriever</p>
-                    <p className="text-sm text-muted-foreground mt-1">15/01/2025 - 10:00 AM</p>
-                  </div>
-                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Đã xác nhận</span>
-                </div>
-                <div className="flex justify-between items-start p-4 bg-muted rounded-lg">
-                  <div>
-                    <p className="font-medium">Spa & Grooming</p>
-                    <p className="text-sm text-muted-foreground">Luna - Mèo Ba Tư</p>
-                    <p className="text-sm text-muted-foreground mt-1">18/01/2025 - 2:00 PM</p>
-                  </div>
-                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Đã đặt</span>
-                </div>
+                {bookings.length === 0 ? (
+                  <div className="text-center text-muted-foreground">Không có lịch hẹn nào.</div>
+                ) : (
+                  bookings.map((booking) => (
+                    <div
+                      key={booking.bookingId ?? booking.id}
+                      className="flex justify-between items-start p-4 bg-muted rounded-lg cursor-pointer hover:bg-blue-50"
+                      onClick={() => router.push(`/customer/bookings/${booking.bookingId ?? booking.id}`)}
+                    >
+                      <div>
+                        <p className="font-medium">{booking.title ?? booking.serviceName ?? booking.bookingType ?? 'Lịch hẹn'}</p>
+                        <p className="text-sm text-muted-foreground">{booking.petName ?? booking.pet?.name ?? ''} {booking.pet?.species ?? ''} {booking.pet?.breed ?? ''}</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Ngày đặt: {booking.requestedDateTime ? new Date(booking.requestedDateTime).toLocaleString() : (booking.date ? new Date(booking.date).toLocaleString() : '')}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">Loại lịch: {booking.bookingType ?? '-'}</p>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded ${booking.status === 'Cancelled' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>{booking.status ?? 'Đã xác nhận'}</span>
+                    </div>
+                  ))
+                )}
               </div>
               <Button
                 className="w-full mt-4 bg-transparent"
@@ -162,20 +183,25 @@ export default function CustomerDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {(pets.length ? pets : [
-                  { id: 1, name: 'Max', species: 'Chó', breed: 'Golden Retriever', age: '3 tuổi' },
-                  { id: 2, name: 'Luna', species: 'Mèo', breed: 'Ba Tư', age: '2 tuổi' },
-                ]).map((pet) => (
-                  <div key={pet.petId ?? pet.id} className="flex items-center gap-4 p-4 bg-muted rounded-lg">
-                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <PawPrint className="h-6 w-6 text-primary" />
+                {pets.length === 0 ? (
+                  <div className="text-center text-muted-foreground">Không có thú cưng nào.</div>
+                ) : (
+                  pets.map((pet) => (
+                    <div
+                      key={pet.petId ?? pet.id}
+                      className="flex items-center gap-4 p-4 bg-muted rounded-lg cursor-pointer hover:bg-green-50"
+                      onClick={() => router.push(`/customer/pets/${pet.petId ?? pet.id}`)}
+                    >
+                      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                        <PawPrint className="h-6 w-6 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">{pet.name ?? pet.petName ?? 'Unknown'}</p>
+                        <p className="text-sm text-muted-foreground">{(pet.species ?? pet.type ?? '')} {(pet.breed ?? pet.breedName ?? '')}</p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="font-medium">{pet.name ?? pet.petName ?? 'Unknown'}</p>
-                      <p className="text-sm text-muted-foreground">{(pet.species ?? pet.type ?? '')} {(pet.breed ?? pet.breedName ?? '')}</p>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
               <Button
                 className="w-full mt-4 bg-transparent"

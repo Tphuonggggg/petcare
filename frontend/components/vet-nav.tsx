@@ -3,15 +3,13 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { PawPrint, Calendar, FileText, Users, Stethoscope, LogOut } from "lucide-react"
+import { PawPrint, Calendar, FileText, Users, Stethoscope, Pill, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const items = [
-  { name: 'Tổng quan', href: '/vet', icon: PawPrint },
   { name: 'Lịch hôm nay', href: '/vet', icon: Calendar },
   { name: 'Thú cưng', href: '/vet/pets', icon: Users },
-  { name: 'Ghi chú y tế', href: '/vet/records', icon: FileText },
-  { name: 'Dịch vụ', href: '/vet/services', icon: Stethoscope },
+  { name: 'Tra cứu thuốc', href: '/vet/medicines', icon: Pill },
 ]
 
 export function VetNav() {
@@ -32,7 +30,10 @@ export function VetNav() {
       <nav className="px-3 space-y-1">
         {items.map((it) => {
           const Icon = it.icon
-          const active = pathname === it.href || pathname?.startsWith(it.href + '/')
+          // Only highlight exact match or sub-paths (but not root for sub-paths)
+          const active = it.href === '/vet' 
+            ? pathname === '/vet'
+            : pathname?.startsWith(it.href)
           return (
             <Link
               key={it.name}

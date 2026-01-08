@@ -85,9 +85,9 @@ type VetRecord = {
 type ServiceType = {
   serviceId: number
   name: string
-  price?: number
+  serviceType?: string
+  basePrice?: number
   description?: string
-  branchId?: number
 }
 
 const STORAGE_CUSTOMERS = 'mock_customers_v1'
@@ -162,9 +162,9 @@ function seedEmployees(): Employee[] {
 
 function seedServices(): ServiceType[] {
   return [
-    { serviceId: 1, name: 'Khám bệnh tổng quát', price: 150, description: 'Khám sức khỏe tổng quát cho thú cưng', branchId: 1 },
-    { serviceId: 2, name: 'Tiêm phòng cơ bản', price: 200, description: 'Tiêm phòng vắc xin cơ bản', branchId: 1 },
-    { serviceId: 3, name: 'Cắt tỉa lông', price: 120, description: 'Grooming và cắt tỉa lông', branchId: 2 },
+    { serviceId: 1, name: 'Khám bệnh', serviceType: 'CHECKUP', basePrice: 1500000, description: 'Dịch vụ khám sức khỏe thú cưng' },
+    { serviceId: 2, name: 'Tiêm phòng', serviceType: 'VACCINATION', basePrice: 2300000, description: 'Tiêm vaccine cho thú cưng' },
+    { serviceId: 3, name: 'Gói tiêm phòng', serviceType: 'PACKAGE', basePrice: 12000000, description: 'Gói tiêm phòng theo tháng' },
   ]
 }
 

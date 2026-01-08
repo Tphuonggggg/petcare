@@ -65,12 +65,13 @@ export default function SalesReportsPage() {
       
       // Get recent invoices for display
       const recentInvoicesData = await apiGet(`/invoices?page=1&pageSize=10&branchId=${branchId}`)
-      const recentInvoices = recentInvoicesData.items || recentInvoicesData || []
+      const recentInvoices = (recentInvoicesData.items || recentInvoicesData || [])
+        .sort((a: any, b: any) => new Date(b.invoiceDate || b.createdDate || 0).getTime() - new Date(a.invoiceDate || a.createdDate || 0).getTime())
 
-      // Calculate total revenue from PROCESSING and COMPLETED invoices
+      // Calculate total revenue from PAID invoices
       const processedInvoices = allInvoices.filter((inv: any) => {
         const status = inv.status?.toLowerCase()
-        return status === 'completed' || status === 'processing'
+        return status === 'paid'
       })
       const totalRevenue = processedInvoices.reduce((sum: number, inv: any) => 
         sum + (inv.finalAmount || 0), 0
@@ -82,7 +83,7 @@ export default function SalesReportsPage() {
         const invoiceDate = inv.invoiceDate?.split('T')[0]
         const isToday = invoiceDate === today
         const status = inv.status?.toLowerCase()
-        const isValidForRevenue = status === 'completed' || status === 'processing' || 
+        const isValidForRevenue = status === 'paid' || 
                                  (status === 'pending' && isToday) // Include today's pending orders
         
         return isToday && isValidForRevenue
@@ -101,7 +102,7 @@ export default function SalesReportsPage() {
         
         const dayInvoices = allInvoices.filter((inv: any) => 
           inv.invoiceDate?.split('T')[0] === dateStr &&
-          inv.status?.toLowerCase() === 'completed'
+          inv.status?.toLowerCase() === 'paid'
         )
         
         const revenue = dayInvoices.reduce((sum: number, inv: any) => 
@@ -120,7 +121,7 @@ export default function SalesReportsPage() {
         totalOrders: processedInvoices.length,
         todayRevenue,
         last7Days,
-        recentInvoices: recentInvoices.slice(0, 5) // Show only 5 recent
+        recentInvoices: recentInvoices.slice(0, 5) // Show only 5 most recent
       })
     } catch (err) {
       console.error("Error loading sales data:", err)
@@ -306,14 +307,12 @@ export default function SalesReportsPage() {
                           </div>
                           <div className="flex items-center gap-2 mt-1">
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              invoice.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                              invoice.status === 'Processing' ? 'bg-blue-100 text-blue-800' :
+                              invoice.status === 'Paid' || invoice.status === 'completed' ? 'bg-green-100 text-green-800' :
                               invoice.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
                               'bg-gray-100 text-gray-800'
                             }`}>
                               {invoice.status === 'Pending' ? 'Chờ xử lý' : 
-                               invoice.status === 'Processing' ? 'Đang xử lý' :
-                               invoice.status === 'Completed' ? 'Hoàn thành' : invoice.status}
+                               (invoice.status === 'Paid' || invoice.status === 'completed') ? 'Đã thanh toán' : invoice.status}
                             </span>
                           </div>
                         </div>

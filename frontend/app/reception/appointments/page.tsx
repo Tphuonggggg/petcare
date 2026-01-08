@@ -1,11 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { PawPrint, ArrowLeft, Search, Plus, Filter } from "lucide-react"
+import { PawPrint, ArrowLeft, Search, Plus, Filter, Calendar as CalendarIcon } from "lucide-react"
+import { format } from "date-fns"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { apiGet, apiPost } from "@/lib/api"
 
@@ -17,39 +20,102 @@ interface BookingDetail {
   petType: string
   serviceType: string
   status: string
+  doctorName?: string
   notes?: string
 }
 
 export default function ReceptionAppointmentsPage() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [appointments, setAppointments] = useState<BookingDetail[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("all")
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize] = useState(10) // Số lượng items mỗi trang
+  const [pageSize] = useState(20)
+  const [totalCount, setTotalCount] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [gotoPage, setGotoPage] = useState("")
+  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined)
 
+  // Debounce search input - wait 500ms after user stops typing
   useEffect(() => {
-    loadAppointments()
-  }, [])
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+      setCurrentPage(1) // Reset to page 1 when search changes
+    }, 500)
 
-  const loadAppointments = async () => {
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  const loadAppointments = useCallback(async () => {
     try {
       setLoading(true)
-      const data = await apiGet("/ReceptionistDashboard/today-bookings")
-      setAppointments(data || [])
+      
+      // Get branchId from localStorage
+      let branchId = localStorage.getItem("branchId")
+      
+      if (!branchId) {
+        // If no branchId in localStorage, try to get from employee
+        const employeeId = localStorage.getItem("employeeId")
+        if (employeeId) {
+          try {
+            const empData = await apiGet(`/employees/${employeeId}`)
+            branchId = empData.branchId?.toString()
+            if (branchId) {
+              localStorage.setItem("branchId", branchId)
+            }
+          } catch (error) {
+            console.error("Error loading employee info:", error)
+          }
+        }
+      }
+      
+      if (!branchId) {
+        console.error("No branchId found - using fallback")
+        branchId = "9" // Use Tân Phú as default for testing
+      }
+      
+      // Build API URL with status filter based on active tab
+      let url = `/receptionistdashboard/all-bookings?branchId=${branchId}&page=${currentPage}&pageSize=${pageSize}`
+      if (activeTab === "pending") {
+        url += "&status=Pending"
+      } else if (activeTab === "checkedin") {
+        url += "&status=Confirmed"
+      }
+      if (dateFilter) {
+        url += `&date=${format(dateFilter, 'yyyy-MM-dd')}`
+      } else if (activeTab === "today") {
+        const today = new Date()
+        url += `&date=${format(today, 'yyyy-MM-dd')}`
+      }
+      if (debouncedSearch) {
+        url += `&search=${encodeURIComponent(debouncedSearch)}`
+      }
+      
+      console.log(`[DEBUG] Loading appointments: ${url}`)
+      const data = await apiGet(url)
+      setAppointments(data.items || [])
+      setTotalCount(data.totalCount || 0)
+      setTotalPages(data.totalPages || 0)
+      console.log(`[DEBUG] Loaded ${data.items?.length || 0} appointments, Total: ${data.totalCount}, Pages: ${data.totalPages}`)
     } catch (error) {
       console.error("Error loading appointments:", error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentPage, activeTab, pageSize, debouncedSearch, dateFilter])
+
+  useEffect(() => {
+    loadAppointments()
+  }, [loadAppointments])
 
   const handleCheckIn = async (bookingId: number) => {
     try {
       const employeeId = 1 // TODO: Get from auth context
-      await apiPost(`/ReceptionistDashboard/check-in/${bookingId}`, { employeeId })
+      await apiPost(`/receptionistdashboard/check-in/${bookingId}`, { employeeId })
       alert("Check-in thành công!")
+      setActiveTab("checkedin") // Chuyển sang tab đã check-in
       loadAppointments()
     } catch (error) {
       console.error("Error checking in:", error)
@@ -69,33 +135,8 @@ export default function ReceptionAppointmentsPage() {
     }
   }
 
-  const filterAppointments = () => {
-    let filtered = appointments
-
-    if (searchQuery) {
-      filtered = filtered.filter((apt) =>
-        apt.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        apt.petName.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    }
-
-    if (activeTab === "today") {
-      const today = new Date().toDateString()
-      filtered = filtered.filter((apt) => new Date(apt.bookingTime).toDateString() === today)
-    } else if (activeTab === "pending") {
-      filtered = filtered.filter((apt) => apt.status === "Pending" || apt.status === "Đang chờ")
-    }
-
-    return filtered
-  }
-
-  const filteredAppointments = filterAppointments()
-  
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredAppointments.length / pageSize)
-  const startIndex = (currentPage - 1) * pageSize
-  const endIndex = startIndex + pageSize
-  const paginatedAppointments = filteredAppointments.slice(startIndex, endIndex)
+  // Server-side filtering for tabs and search
+  const displayedAppointments = appointments
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -159,7 +200,7 @@ export default function ReceptionAppointmentsPage() {
           </Button>
         </div>
 
-        <div className="flex gap-4 mb-6">
+        <div className="flex gap-4 mb-6 items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -169,17 +210,35 @@ export default function ReceptionAppointmentsPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button variant="outline" className="bg-transparent">
-            <Filter className="h-4 w-4 mr-2" />
-            Lọc
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="bg-transparent flex gap-2 items-center">
+                <CalendarIcon className="h-4 w-4" />
+                {dateFilter ? format(dateFilter, 'dd/MM/yyyy') : 'Chọn ngày'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={dateFilter}
+                onSelect={d => { setDateFilter(d ?? undefined); setCurrentPage(1); }}
+                initialFocus
+              />
+              {dateFilter && (
+                <Button size="sm" variant="ghost" className="w-full mt-2" onClick={() => setDateFilter(undefined)}>
+                  Xóa lọc ngày
+                </Button>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6">
-            <TabsTrigger value="all">Tất cả ({appointments.length})</TabsTrigger>
+            <TabsTrigger value="all">Tất cả ({totalCount})</TabsTrigger>
             <TabsTrigger value="today">Hôm nay</TabsTrigger>
             <TabsTrigger value="pending">Chờ xác nhận</TabsTrigger>
+            <TabsTrigger value="checkedin">Đã check-in</TabsTrigger>
           </TabsList>
 
           <TabsContent value={activeTab}>
@@ -188,19 +247,19 @@ export default function ReceptionAppointmentsPage() {
                 <div className="flex justify-between items-center">
                   <CardTitle>Danh sách lịch hẹn</CardTitle>
                   <span className="text-sm text-muted-foreground">
-                    Tổng: {filteredAppointments.length} lịch hẹn
+                    Tổng: {totalCount} lịch hẹn (Trang {currentPage}/{totalPages})
                   </span>
                 </div>
               </CardHeader>
               <CardContent>
-                {filteredAppointments.length === 0 ? (
+                {displayedAppointments.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     Không có lịch hẹn nào
                   </div>
                 ) : (
                   <>
                     <div className="space-y-4">
-                      {paginatedAppointments.map((apt) => {
+                      {displayedAppointments.map((apt) => {
                       const { date, time } = formatDateTime(apt.bookingTime)
                       return (
                         <div key={apt.bookingId} className="p-4 border rounded-lg hover:bg-muted/50">
@@ -220,6 +279,12 @@ export default function ReceptionAppointmentsPage() {
                               <p className="text-sm text-muted-foreground">Dịch vụ</p>
                               <p className="font-medium">{apt.serviceType}</p>
                             </div>
+                            {apt.doctorName && (
+                              <div>
+                                <p className="text-sm text-muted-foreground">Bác sĩ</p>
+                                <p className="font-medium">{apt.doctorName}</p>
+                              </div>
+                            )}
                             {apt.notes && (
                               <div className="md:col-span-2">
                                 <p className="text-sm text-muted-foreground">Ghi chú</p>
@@ -247,14 +312,14 @@ export default function ReceptionAppointmentsPage() {
                           </div>
                         </div>
                       )
-                    })}
+                      })}
                     </div>
 
-                    {/* Pagination */}
+                    {/* Server-side Pagination */}
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between mt-6 pt-4 border-t">
                         <div className="text-sm text-muted-foreground">
-                          Hiển thị {startIndex + 1} - {Math.min(endIndex, filteredAppointments.length)} của {filteredAppointments.length}
+                          Trang {currentPage} của {totalPages} - Tổng cộng {totalCount} lịch hẹn
                         </div>
                         <div className="flex items-center gap-2">
                           <Button
@@ -290,8 +355,8 @@ export default function ReceptionAppointmentsPage() {
                                   key={pageNum}
                                   variant={currentPage === pageNum ? "default" : "outline"}
                                   size="sm"
+                                  className="w-8 h-8 p-0"
                                   onClick={() => setCurrentPage(pageNum)}
-                                  className="w-10"
                                 >
                                   {pageNum}
                                 </Button>
@@ -304,7 +369,7 @@ export default function ReceptionAppointmentsPage() {
                             onClick={() => setCurrentPage(currentPage + 1)}
                             disabled={currentPage === totalPages}
                           >
-                            Sau
+                            Tiếp
                           </Button>
                           <Button
                             variant="outline"
@@ -314,6 +379,19 @@ export default function ReceptionAppointmentsPage() {
                           >
                             Cuối
                           </Button>
+                          {/* Input nhảy trang */}
+                          <form onSubmit={e => { e.preventDefault(); const n = Number(gotoPage); if (n >= 1 && n <= totalPages) setCurrentPage(n) }} className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              min={1}
+                              max={totalPages}
+                              value={gotoPage}
+                              onChange={e => setGotoPage(e.target.value)}
+                              placeholder="Tới trang..."
+                              className="w-20 h-8 px-2 py-1 text-sm"
+                            />
+                            <Button type="submit" size="sm" variant="outline">Đi</Button>
+                          </form>
                         </div>
                       </div>
                     )}

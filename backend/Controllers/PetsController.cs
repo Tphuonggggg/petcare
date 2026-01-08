@@ -32,17 +32,57 @@ public class PetsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns paginated pets.
+    /// Returns paginated pets, optionally filtered by branch.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<PaginatedResult<PetDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<ActionResult<PaginatedResult<PetDto>>> Get(
+        [FromQuery] int page = 1, 
+        [FromQuery] int pageSize = 20,
+        [FromQuery] int? branchId = null,
+        [FromQuery] string? search = null,
+        [FromQuery] int? customerId = null)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 20;
-        var q = _context.Pets.AsQueryable();
+        
+        var q = _context.Pets
+            .Include(p => p.Customer)
+            .AsQueryable();
+
+        // Filter by customerId if provided
+        if (customerId.HasValue)
+        {
+            q = q.Where(p => p.CustomerId == customerId.Value);
+        }
+        
+        // Search by pet name or customer name
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            Console.WriteLine($"[DEBUG] Searching pets for: '{search}'");
+            q = q.Where(p => 
+                EF.Functions.Like(p.Name, $"%{search}%") ||
+                EF.Functions.Like(p.Customer.FullName, $"%{search}%"));
+        }
+        
+        // Filter by branch if provided
+        if (branchId.HasValue)
+        {
+            // Get customers who have invoices at this branch
+            var branchCustomerIds = await _context.Invoices
+                .Where(i => i.BranchId == branchId.Value)
+                .Select(i => i.CustomerId)
+                .Distinct()
+                .ToListAsync();
+            
+            q = q.Where(p => branchCustomerIds.Contains(p.CustomerId));
+            Console.WriteLine($"[DEBUG] Filtering pets for branchId={branchId}, found {branchCustomerIds.Count} customers");
+        }
+        
         var total = await q.CountAsync();
         var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
         var dtos = _mapper.Map<List<PetDto>>(items);
+        
+        Console.WriteLine($"[DEBUG] Returning {items.Count} pets, total={total}, page={page}");
         return new PaginatedResult<PetDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 

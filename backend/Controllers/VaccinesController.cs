@@ -29,10 +29,10 @@ public class VaccinesController : ControllerBase
     }
 
     /// <summary>
-    /// Returns paginated vaccines.
+    /// Returns paginated vaccines with stock quantity by branch.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<PaginatedResult<VaccineDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<ActionResult<PaginatedResult<VaccineDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] int? branchId = null)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 20;
@@ -40,6 +40,25 @@ public class VaccinesController : ControllerBase
         var total = await q.CountAsync();
         var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
         var dtos = _mapper.Map<List<VaccineDto>>(items);
+        
+        // Calculate stock quantity per branch
+        if (branchId.HasValue)
+        {
+            var stockDict = await _context.VaccineBatches
+                .Where(vb => vb.BranchId == branchId.Value)
+                .GroupBy(vb => vb.VaccineId)
+                .Select(g => new { VaccineId = g.Key, TotalQty = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.VaccineId, x => x.TotalQty);
+            
+            foreach (var dto in dtos)
+            {
+                if (dto.VaccineId.HasValue && stockDict.TryGetValue(dto.VaccineId.Value, out var qty))
+                {
+                    dto.StockQuantity = qty;
+                }
+            }
+        }
+        
         return new PaginatedResult<VaccineDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 

@@ -29,14 +29,21 @@ public class ReviewsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns paginated reviews.
+    /// Returns paginated reviews, optionally filtered by branch.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<PaginatedResult<ReviewDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<ActionResult<PaginatedResult<ReviewDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] int? branchId = null)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 20;
         var q = _context.Reviews.AsQueryable();
+        
+        // Filter by branch if provided
+        if (branchId.HasValue)
+        {
+            q = q.Where(r => r.BranchId == branchId.Value);
+        }
+        
         var total = await q.CountAsync();
         var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
         var dtos = _mapper.Map<List<ReviewDto>>(items);

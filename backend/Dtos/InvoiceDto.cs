@@ -32,6 +32,10 @@ public class InvoiceDto
     [StringLength(20)]
     public string? CustomerPhone { get; set; }
 
+    /// <summary>Customer email (optional, for display).</summary>
+    [StringLength(100)]
+    public string? CustomerEmail { get; set; }
+
     /// <summary>Employee who processed the invoice (optional).</summary>
     public int? EmployeeId { get; set; }
 

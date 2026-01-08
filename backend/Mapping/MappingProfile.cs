@@ -20,7 +20,9 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.Pets, opt => opt.MapFrom(src => src.Pets));
         CreateMap<Pet, PetDto>()
             .ForMember(dest => dest.BirthDate, opt => opt.MapFrom(src => src.BirthDate.HasValue ? src.BirthDate.Value.ToDateTime(TimeOnly.MinValue) : (DateTime?)null));
-        CreateMap<Booking, BookingDto>();
+        CreateMap<Booking, BookingDto>()
+            .ForMember(dest => dest.DoctorName, opt => opt.MapFrom(src => src.Doctor != null ? src.Doctor.FullName : null))
+            .ForMember(dest => dest.DoctorId, opt => opt.MapFrom(src => src.DoctorId));
 
             // reverse maps if needed
             CreateMap<CustomerDto, Customer>()
@@ -73,13 +75,18 @@ public class MappingProfile : Profile
 
             CreateMap<InvoiceItem, InvoiceItemDto>()
                 .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : null))
-                .ForMember(dest => dest.ServiceName, opt => opt.MapFrom(src => src.Service != null ? src.Service.Name : null));
+                .ForMember(dest => dest.ServiceName, opt => opt.MapFrom(src => src.Service != null ? src.Service.Name : null))
+                .ForMember(dest => dest.Category, opt => opt.MapFrom(src => src.Product != null ? src.Product.Category : null))
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Product != null ? src.Product.Description : null))
+                .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Product != null ? src.Product.Price : (decimal?)null))
+                .ForMember(dest => dest.StockQty, opt => opt.MapFrom(src => src.Product != null ? src.Product.StockQty : (int?)null));
             CreateMap<InvoiceItemDto, InvoiceItem>();
 
             CreateMap<Invoice, InvoiceDto>()
                 .ForMember(dest => dest.BranchName, opt => opt.MapFrom(src => src.Branch != null ? src.Branch.Name : null))
                 .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.FullName : null))
                 .ForMember(dest => dest.CustomerPhone, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Phone : null))
+                .ForMember(dest => dest.CustomerEmail, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Email : null))
                 .ForMember(dest => dest.Items, opt => opt.MapFrom(src => src.InvoiceItems));
             CreateMap<InvoiceDto, Invoice>();
 

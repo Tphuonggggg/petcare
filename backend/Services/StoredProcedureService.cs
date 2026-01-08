@@ -82,14 +82,14 @@ public class StoredProcedureService : IStoredProcedureService
                 new SqlParameter("@StaffID", request.StaffId),
             };
 
-            var result = await _context.Database.SqlQueryRaw<int>(
+            var results = await _context.Database.SqlQueryRaw<decimal>(
                 "EXEC usp_CreateBookingByStaff @CustomerID, @PetID, @BookingDate, @BookingType, @StaffID",
                 parameters
-            ).FirstOrDefaultAsync();
+            ).ToListAsync();
 
             return new CreateBookingResponseDto
             {
-                NewBookingId = result,
+                NewBookingId = Convert.ToInt32(results.FirstOrDefault()),
                 Message = "Booking created successfully"
             };
         }
@@ -214,10 +214,11 @@ public class StoredProcedureService : IStoredProcedureService
             };
 
             // Proc returns SCOPE_IDENTITY() - PetID
-            var petId = await _context.Database.SqlQueryRaw<int>(
+            var petIds = await _context.Database.SqlQueryRaw<decimal>(
                 "EXEC usp_Staff_RegisterNewPet @CustomerID, @PetName, @Species, @Breed, @BirthDate, @Gender, @Status",
                 parameters
-            ).FirstOrDefaultAsync();
+            ).ToListAsync();
+            var petId = Convert.ToInt32(petIds.FirstOrDefault());
 
             // Fetch created pet
             var pet = await _context.Pets.FindAsync(petId);
@@ -259,12 +260,12 @@ public class StoredProcedureService : IStoredProcedureService
                 new SqlParameter("@PaymentMethod", request.PaymentMethod),
             };
 
-            var invoiceId = await _context.Database.SqlQueryRaw<int>(
+            var invoiceIds = await _context.Database.SqlQueryRaw<decimal>(
                 "EXEC usp_Staff_CreateOrder @BranchID, @CustomerID, @EmployeeID, @PetID, @PaymentMethod",
                 parameters
-            ).FirstOrDefaultAsync();
+            ).ToListAsync();
 
-            return new CreateOrderResponseDto { InvoiceId = invoiceId };
+            return new CreateOrderResponseDto { InvoiceId = Convert.ToInt32(invoiceIds.FirstOrDefault()) };
         }
         catch (Exception ex)
         {
@@ -305,10 +306,11 @@ public class StoredProcedureService : IStoredProcedureService
                 new SqlParameter("@PaymentMethod", request.PaymentMethod ?? (object)DBNull.Value),
             };
 
-            var result = await _context.Database.SqlQueryRaw<(int, string, string, decimal, decimal, decimal, string)>(
+            var results = await _context.Database.SqlQueryRaw<(int, string, string, decimal, decimal, decimal, string)>(
                 "EXEC usp_Staff_ConfirmInvoice @InvoiceID, @PaymentMethod",
                 parameters
-            ).FirstOrDefaultAsync();
+            ).ToListAsync();
+            var result = results.FirstOrDefault();
 
             return new ConfirmInvoiceResponseDto
             {
@@ -405,12 +407,12 @@ public class StoredProcedureService : IStoredProcedureService
                 new SqlParameter("@PetID", request.PetId ?? (object)DBNull.Value),
             };
 
-            var invoiceId = await _context.Database.SqlQueryRaw<int>(
+            var invoiceIds = await _context.Database.SqlQueryRaw<decimal>(
                 "EXEC usp_Customer_PurchaseProduct @CustomerID, @BranchID, @EmployeeID, @ProductID, @Quantity, @PaymentMethod, @PetID",
                 parameters
-            ).FirstOrDefaultAsync();
+            ).ToListAsync();
 
-            return invoiceId;
+            return Convert.ToInt32(invoiceIds.FirstOrDefault());
         }
         catch (Exception ex)
         {
@@ -489,13 +491,15 @@ public class StoredProcedureService : IStoredProcedureService
                 new SqlParameter("@Diagnosis", request.Diagnosis ?? (object)DBNull.Value),
                 new SqlParameter("@Prescription", request.Prescription ?? (object)DBNull.Value),
                 new SqlParameter("@FollowUpDate", request.FollowUpDate ?? (object)DBNull.Value),
+                new SqlParameter("@BookingID", request.BookingId ?? (object)DBNull.Value),
             };
 
-            var checkId = await _context.Database.SqlQueryRaw<int>(
-                "EXEC usp_CheckHealth_Create @PetID, @DoctorID, @Symptoms, @Diagnosis, @Prescription, @FollowUpDate",
+            var results = await _context.Database.SqlQueryRaw<decimal>(
+                "EXEC usp_CheckHealth_Create @PetID, @DoctorID, @Symptoms, @Diagnosis, @Prescription, @FollowUpDate, @BookingID",
                 parameters
-            ).FirstOrDefaultAsync();
+            ).ToListAsync();
 
+            var checkId = Convert.ToInt32(results.FirstOrDefault());
             return new CreateCheckHealthResponseDto { NewCheckId = checkId };
         }
         catch (Exception ex)
@@ -547,12 +551,12 @@ public class StoredProcedureService : IStoredProcedureService
                 new SqlParameter("@ToDate", toDate.Date),
             };
 
-            var result = await _context.Database.SqlQueryRaw<int>(
+            var results = await _context.Database.SqlQueryRaw<int>(
                 "EXEC usp_GetVisitStatistics @FromDate, @ToDate",
                 parameters
-            ).FirstOrDefaultAsync();
+            ).ToListAsync();
 
-            return new VisitStatisticsDto { TotalVisits = result };
+            return new VisitStatisticsDto { TotalVisits = results.FirstOrDefault() };
         }
         catch (Exception ex)
         {
@@ -570,12 +574,12 @@ public class StoredProcedureService : IStoredProcedureService
                 new SqlParameter("@ToDate", toDate.Date),
             };
 
-            var result = await _context.Database.SqlQueryRaw<decimal?>(
+            var results = await _context.Database.SqlQueryRaw<decimal?>(
                 "EXEC usp_GetSystemRevenue @FromDate, @ToDate",
                 parameters
-            ).FirstOrDefaultAsync();
+            ).ToListAsync();
 
-            return new SystemRevenueDto { TotalSystemRevenue = result ?? 0 };
+            return new SystemRevenueDto { TotalSystemRevenue = results.FirstOrDefault() ?? 0 };
         }
         catch (Exception ex)
         {
@@ -674,10 +678,11 @@ public class StoredProcedureService : IStoredProcedureService
                 new SqlParameter("@ToDate", toDate.Date),
             };
 
-            var result = await _context.Database.SqlQueryRaw<(string, decimal, int, int)>(
+            var results = await _context.Database.SqlQueryRaw<(string, decimal, int, int)>(
                 "EXEC usp_Manager_GetBranchPerformance @BranchID, @FromDate, @ToDate",
                 parameters
-            ).FirstOrDefaultAsync();
+            ).ToListAsync();
+            var result = results.FirstOrDefault();
 
             return new BranchPerformanceDto
             {
@@ -754,10 +759,11 @@ public class StoredProcedureService : IStoredProcedureService
 
             // Thực thi proc (trả về 2 result sets)
             // Đối với EF Core, phải gọi riêng từng query
-            var summaryResult = await _context.Database.SqlQueryRaw<(decimal, decimal, decimal, int)>(
+            var summaryResults = await _context.Database.SqlQueryRaw<(decimal, decimal, decimal, int)>(
                 "EXEC usp_BranchManager_ReviewSummary @BranchID",
                 parameter
-            ).FirstOrDefaultAsync();
+            ).ToListAsync();
+            var summaryResult = summaryResults.FirstOrDefault();
 
             var negativeReviews = await _context.Database.SqlQueryRaw<(int, int, string, DateTime)>(
                 "SELECT CustomerID, RatingOverall, Comment, CreatedAt FROM Review WHERE BranchID = @BranchID AND RatingOverall <= 3 ORDER BY CreatedAt DESC",

@@ -1275,52 +1275,97 @@ SELECT
 FROM (SELECT TOP 600000 BookingID, RequestedDateTime, Status FROM Booking ORDER BY NEWID()) B;
 GO
 --CHeckHealth
-;WITH CH AS (
-    SELECT TOP (100000)
-        ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS rn
-    FROM master..spt_values a CROSS JOIN master..spt_values b
+DECLARE @StartTime DATETIME = GETDATE();
+DECLARE @StartDate DATE = DATEADD(YEAR, -2, GETDATE());
+DECLARE @EndDate DATE = GETDATE();
+DECLARE @DayRange INT = DATEDIFF(DAY, @StartDate, @EndDate);
+DECLARE @MinDoctorId INT = 2, @MaxDoctorId INT = 10;
+
+-- 30 Symptoms
+DECLARE @Symptoms TABLE (Id INT PRIMARY KEY, Txt NVARCHAR(255));
+INSERT INTO @Symptoms VALUES
+(1,N'Khám định kỳ, không triệu chứng'),(2,N'Ho khan, sổ mũi'),(3,N'Ho có đờm, khó thở'),
+(4,N'Ngứa, rụng lông'),(5,N'Tiêu chảy, phân lỏng'),(6,N'Nôn mửa sau ăn'),
+(7,N'Ăn kém, sụt cân'),(8,N'Đau chân, khập khễnh'),(9,N'Chảy máu lợi, hôi miệng'),
+(10,N'Mắt đỏ, chảy nước mắt'),(11,N'Ngứa liên tục, phát ban'),(12,N'Thở khò khè, ho nhiều'),
+(13,N'Uống nhiều nước'),(14,N'Gãi tai, có mùi hôi'),(15,N'Sốt cao 39-40°C'),
+(16,N'Sưng bụng, khó thở'),(17,N'Yếu ớt, không đứng được'),(18,N'Tái khám sau điều trị'),
+(19,N'Kiểm tra sau phẫu thuật'),(20,N'Tiêm phòng định kỳ'),(21,N'Chích vaccine'),
+(22,N'Triệt sản'),(23,N'Vết thương hở, chảy máu'),(24,N'Run, co giật'),
+(25,N'Bồn chồn, kêu thét'),(26,N'Khó thở, thở nhanh'),(27,N'Da khô, nứt nẻ'),
+(28,N'Răng lung lay'),(29,N'Mệt mỏi, ngủ nhiều'),(30,N'Sốt nhẹ, lả lơi');
+
+-- 30 Diagnoses
+DECLARE @Diagnoses TABLE (Id INT PRIMARY KEY, Txt NVARCHAR(255));
+INSERT INTO @Diagnoses VALUES
+(1,N'Sức khỏe tốt'),(2,N'Viêm đường hô hấp trên'),(3,N'Viêm phổi nhẹ'),
+(4,N'Viêm da do nấm'),(5,N'Rối loạn tiêu hóa cấp'),(6,N'Viêm dạ dày ruột'),
+(7,N'Bong gân cấp độ 1'),(8,N'Viêm nha chu'),(9,N'Viêm kết mạc mắt'),
+(10,N'Dị ứng thức ăn'),(11,N'Nhiễm trùng hô hấp'),(12,N'Suy thận mãn tính'),
+(13,N'Viêm tai ngoài'),(14,N'Sốt virus'),(15,N'Suy dinh dưỡng'),
+(16,N'Chấn thương nhẹ'),(17,N'Đã hồi phục hoàn toàn'),(18,N'Đang hồi phục tốt'),
+(19,N'Khỏi bệnh'),(20,N'Cần theo dõi thêm'),(21,N'Viêm khớp thoái hóa'),
+(22,N'Ghẻ demodex'),(23,N'Nhiễm ký sinh trùng'),(24,N'Gãy xương'),
+(25,N'Loét giác mạc'),(26,N'Viêm bàng quang'),(27,N'Cảm lạnh thông thường'),
+(28,N'Thiếu vitamin'),(29,N'Nhiễm trùng vết thương'),(30,N'Thai kỳ bình thường');
+
+-- 30 Prescription parts
+DECLARE @Meds TABLE (Id INT PRIMARY KEY, Txt NVARCHAR(255));
+INSERT INTO @Meds VALUES
+(1,N'Amoxicillin 250mg'),(2,N'Cephalexin 500mg'),(3,N'Doxycycline 100mg'),
+(4,N'Meloxicam giảm đau'),(5,N'Probiotic'),(6,N'Vitamin B complex'),
+(7,N'Ketoconazole cream'),(8,N'Thuốc nhỏ mắt'),(9,N'Thuốc nhỏ tai Otomax'),
+(10,N'Tắm thuốc Chlorhexidine'),(11,N'Thuốc tẩy giun'),(12,N'Vaccine Rabies'),
+(13,N'Bù nước điện giải'),(14,N'Nghỉ ngơi 2 tuần'),(15,N'Hạn chế vận động'),
+(16,N'Đeo phễu bảo vệ'),(17,N'Băng bó vết thương'),(18,N'Xét nghiệm máu'),
+(19,N'Lấy cao răng'),(20,N'Thức ăn đặc biệt'),(21,N'Prednisone 5mg'),
+(22,N'Metronidazole 250mg'),(23,N'Vitamin C 500mg'),(24,N'Thuốc mỡ mắt'),
+(25,N'Shampoo chữa nấm'),(26,N'X-quang ngực'),(27,N'Siêu âm bụng'),
+(28,N'Theo dõi thân nhiệt'),(29,N'Cho ăn thức ăn mềm'),(30,N'Khâu vết thương');
+
+-- Generate records using index-based selection (NO ORDER BY NEWID!)
+WITH PetWithRandom AS (
+    SELECT 
+        PetID,
+        1 + (ABS(CAST(CHECKSUM(NEWID()) AS BIGINT)) % 3) AS NumRecords, -- 1-3 records
+        ABS(CAST(CHECKSUM(NEWID()) AS BIGINT)) % 2147483647 AS Seed1,
+        ABS(CAST(CHECKSUM(NEWID()) AS BIGINT)) % 2147483647 AS Seed2,
+        ABS(CAST(CHECKSUM(NEWID()) AS BIGINT)) % 2147483647 AS Seed3
+    FROM Pet
+),
+Numbers AS (
+    SELECT 1 AS N UNION ALL SELECT 2 UNION ALL SELECT 3
+),
+ExpandedRecords AS (
+    SELECT 
+        p.PetID,
+        n.N AS RecordNum,
+        p.Seed1,
+        p.Seed2,
+        p.Seed3,
+        ROW_NUMBER() OVER (ORDER BY p.PetID, n.N) AS RowNum
+    FROM PetWithRandom p
+    CROSS JOIN Numbers n
+    WHERE n.N <= p.NumRecords
 )
 INSERT INTO CheckHealth (PetID, DoctorID, CheckDate, Symptoms, Diagnosis, Prescription, FollowUpDate)
 SELECT 
-    (SELECT TOP 1 PetID FROM Pet ORDER BY NEWID()),
-    (SELECT TOP 1 EmployeeID FROM Employee WHERE PositionID = 1 ORDER BY NEWID()),
-    
-    -- CheckDate: Random trong vòng 365 ngày trước tính đến hiện tại
-    DATEADD(MINUTE, -ABS(CHECKSUM(NEWID())) % 525600, GETDATE()) AS CheckDate,
-
-    -- Symptoms
-    CASE ABS(CHECKSUM(NEWID())) % 5
-        WHEN 0 THEN N'Sốt, biếng ăn'
-        WHEN 1 THEN N'Nôn ói, tiêu chảy'
-        WHEN 2 THEN N'Ho, khó thở'
-        WHEN 3 THEN N'Ngứa, rụng lông'
-        ELSE N'Không chịu ăn'
-    END,
-
-    -- Diagnosis
-    CASE ABS(CHECKSUM(NEWID())) % 5
-        WHEN 0 THEN N'Nghi ngờ nhiễm khuẩn'
-        WHEN 1 THEN N'Viêm dạ dày'
-        WHEN 2 THEN N'Cảm lạnh'
-        WHEN 3 THEN N'Nhiễm ký sinh trùng'
-        ELSE N'Suy dinh dưỡng nhẹ'
-    END,
-
-    -- Prescription
-    CASE ABS(CHECKSUM(NEWID())) % 5
-        WHEN 0 THEN N'Kháng sinh 5 ngày'
-        WHEN 1 THEN N'Bù nước điện giải'
-        WHEN 2 THEN N'Thuốc ho + vitamin'
-        WHEN 3 THEN N'Thuốc tẩy giun'
-        ELSE N'Tăng cường bổ sung dinh dưỡng'
-    END,
-
-    -- Follow up date
-    CASE WHEN ABS(CHECKSUM(NEWID())) % 3 = 0 
-         THEN DATEADD(DAY, (ABS(CHECKSUM(NEWID())) % 11) + 3, GETDATE()) -- Tương lai
-         ELSE NULL END
-FROM CH; 
-GO
+    e.PetID,
+    @MinDoctorId + ((e.Seed1 + e.RowNum) % (@MaxDoctorId - @MinDoctorId + 1)) AS DoctorID,
+    DATEADD(DAY, -(e.Seed2 % @DayRange), @EndDate) AS CheckDate,
+    s.Txt AS Symptoms,
+    d.Txt AS Diagnosis,
+    m1.Txt + 
+        CASE WHEN (e.Seed3 % 10) < 6 THEN ' + ' + m2.Txt ELSE '' END AS Prescription,
+    CASE WHEN ((e.Seed1 + e.Seed2) % 10) < 4 
+        THEN DATEADD(DAY, 7 + ((e.Seed3 % 54)), DATEADD(DAY, -(e.Seed2 % @DayRange), @EndDate))
+        ELSE NULL 
+    END AS FollowUpDate
+FROM ExpandedRecords e
+INNER JOIN @Symptoms s ON s.Id = 1 + ((e.RowNum + e.Seed1) % 30)
+INNER JOIN @Diagnoses d ON d.Id = 1 + ((e.RowNum + e.Seed2) % 30)
+INNER JOIN @Meds m1 ON m1.Id = 1 + ((e.RowNum + e.Seed3) % 30)
+INNER JOIN @Meds m2 ON m2.Id = 1 + ((e.RowNum + e.Seed3 + 7) % 30);
 --VaccineRecord
 ;WITH VR AS (
     SELECT TOP (400000)
@@ -2001,6 +2046,7 @@ GO
 CREATE PROC sp_Booking_Create
 @CustomerID INT,
 @PetID INT,
+@BranchID INT = NULL,
 @BookingType NVARCHAR(50),
 @RequestedDateTime DATETIME,
 @Status NVARCHAR(20),
@@ -2012,9 +2058,37 @@ BEGIN
     RAISERROR(N'Khách hàng hoặc thú cưng không tồn tại',16,1)
     RETURN
 END
+
+-- Determine BranchID if not provided
+DECLARE @FinalBranchID INT;
+IF @BranchID IS NOT NULL
+BEGIN
+    SET @FinalBranchID = @BranchID;
+END
+ELSE
+BEGIN
+    -- Get customer's last invoiced branch
+    SELECT TOP 1 @FinalBranchID = BranchID
+    FROM Invoice
+    WHERE CustomerID = @CustomerID
+    ORDER BY InvoiceDate DESC;
+    
+    -- If customer has no invoices, use first branch as default
+    IF @FinalBranchID IS NULL
+    BEGIN
+        SELECT TOP 1 @FinalBranchID = BranchID FROM Branch ORDER BY BranchID;
+    END
+    
+    -- If still no branch, use 1 as fallback
+    IF @FinalBranchID IS NULL
+    BEGIN
+        SET @FinalBranchID = 1;
+    END
+END
+
 INSERT INTO Booking
-(CustomerID,PetID,BookingType,RequestedDateTime,Status,Notes)
-VALUES(@CustomerID,@PetID,@BookingType,@RequestedDateTime,@Status,@Notes)
+(CustomerID,PetID,BranchID,BookingType,RequestedDateTime,Status,Notes)
+VALUES(@CustomerID,@PetID,@FinalBranchID,@BookingType,@RequestedDateTime,@Status,@Notes)
 GO
 
 ----------Update Booking--------------------
@@ -2441,6 +2515,7 @@ BEGIN
         CAST(FinalAmount / 50000 AS INT),
         N'Thanh toán hóa đơn'
     FROM inserted
+    WHERE CAST(FinalAmount / 50000 AS INT) > 0  -- Only insert if points > 0
 END
 GO
 /*============================================================
@@ -2897,7 +2972,8 @@ CREATE OR ALTER PROCEDURE usp_CreateBookingByCustomer
     @CustomerID INT,
     @PetID INT,
     @BookingDate DATETIME,
-    @BookingType NVARCHAR(10) -- 'KHAM' hoặc 'TIEM'
+    @BookingType NVARCHAR(10), -- 'KHAM' hoặc 'TIEM'
+    @BranchID INT = NULL -- Optional: specify branch, otherwise use customer's last invoiced branch
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -2908,12 +2984,41 @@ BEGIN
         RETURN;
     END
 
+    -- Determine BranchID if not provided
+    DECLARE @FinalBranchID INT;
+    
+    IF @BranchID IS NOT NULL
+    BEGIN
+        SET @FinalBranchID = @BranchID;
+    END
+    ELSE
+    BEGIN
+        -- Get customer's last invoiced branch
+        SELECT TOP 1 @FinalBranchID = BranchID
+        FROM Invoice
+        WHERE CustomerID = @CustomerID
+        ORDER BY InvoiceDate DESC;
+        
+        -- If customer has no invoices, use first branch as default
+        IF @FinalBranchID IS NULL
+        BEGIN
+            SELECT TOP 1 @FinalBranchID = BranchID FROM Branch ORDER BY BranchID;
+        END
+        
+        -- If still no branch, use 1 as fallback
+        IF @FinalBranchID IS NULL
+        BEGIN
+            SET @FinalBranchID = 1;
+        END
+    END
+
     INSERT INTO Booking
-    (CustomerID, PetID, BookingType, RequestedDateTime, Status)
+    (CustomerID, PetID, BranchID, BookingType, RequestedDateTime, Status)
     VALUES
     (
         @CustomerID,
         @PetID,
+        @FinalBranchID,
         @BookingType,
         @BookingDate,
         'Pending'
@@ -3152,7 +3257,8 @@ CREATE OR ALTER PROCEDURE usp_CheckHealth_Create
     @Symptoms NVARCHAR(255),
     @Diagnosis NVARCHAR(255) = NULL,
     @Prescription NVARCHAR(255) = NULL,
-    @FollowUpDate DATETIME = NULL
+    @FollowUpDate DATETIME = NULL,
+    @BookingID INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3167,7 +3273,17 @@ BEGIN
     INSERT INTO CheckHealth (PetID, DoctorID, CheckDate, Symptoms, Diagnosis, Prescription, FollowUpDate)
     VALUES (@PetID, @DoctorID, GETDATE(), @Symptoms, @Diagnosis, @Prescription, @FollowUpDate);
     
-    SELECT SCOPE_IDENTITY() AS NewCheckID;
+    DECLARE @NewCheckID INT = SCOPE_IDENTITY();
+    
+    -- Cập nhật trạng thái booking thành 'Completed' nếu có BookingID
+    IF @BookingID IS NOT NULL
+    BEGIN
+        UPDATE Booking 
+        SET Status = 'Completed'
+        WHERE BookingID = @BookingID;
+    END
+    
+    SELECT @NewCheckID AS NewCheckID;
 END;
 GO
 /*============================================================
@@ -3230,31 +3346,20 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    -- Lưu ý: Vì bảng Booking không có DoctorID trực tiếp, 
-    -- ta có thể xem qua các ca khám đã thực hiện (CheckHealth) 
-    -- hoặc dựa trên logic phân bổ bác sĩ cho Booking.
+    -- Lấy lịch trình tương lai từ Booking (Pending/Confirmed)
+    -- chỉ hiển thị lịch hẹn trong tương lai của bác sĩ
     
     SELECT 
-        CheckDate AS AppointmentTime,
+        B.RequestedDateTime AS AppointmentTime,
         P.Name AS PetName,
-        'Examination' AS Activity
-    FROM CheckHealth CH
-    JOIN Pet P ON CH.PetID = P.PetID
-    WHERE CH.DoctorID = @DoctorID 
-      AND CAST(CH.CheckDate AS DATE) = @Date
+        B.BookingType AS Activity
+    FROM Booking B
+    JOIN Pet P ON B.PetID = P.PetID
+    WHERE B.DoctorID = @DoctorID 
+      AND CAST(B.RequestedDateTime AS DATE) = @Date
+      AND B.Status IN ('Pending', 'Confirmed')
       
-    UNION ALL
-    
-    SELECT 
-        DateAdministered,
-        P.Name,
-        'Vaccination'
-    FROM VaccineRecord VR
-    JOIN Pet P ON VR.PetID = P.PetID
-    WHERE VR.DoctorID = @DoctorID 
-      AND CAST(VR.DateAdministered AS DATE) = @Date
-      
-    ORDER BY AppointmentTime;
+    ORDER BY B.RequestedDateTime;
 END;
 GO
 
@@ -3741,3 +3846,337 @@ BEGIN
 END;
 GO
 
+-- =============================================
+-- Script: Thêm BranchID vào bảng Booking
+-- Ngày tạo: 2026-01-07
+-- Mục đích: 
+--   - Thêm trường BranchID để theo dõi booking thuộc chi nhánh nào
+--   - Điền dữ liệu cho các booking hiện có dựa trên logic nghiệp vụ
+-- =============================================
+PRINT '========================================';
+PRINT 'BẮT ĐẦU MIGRATION: Thêm BranchID vào Booking';
+PRINT '========================================';
+PRINT '';
+
+-- =============================================
+-- Bước 1: Kiểm tra và thêm cột BranchID
+-- =============================================
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.columns 
+    WHERE object_id = OBJECT_ID('dbo.Booking') 
+    AND name = 'BranchID'
+)
+BEGIN
+    PRINT '[Bước 1] Thêm cột BranchID vào bảng Booking...';
+    
+    ALTER TABLE dbo.Booking
+    ADD BranchID INT NULL;
+    
+    PRINT '✓ Đã thêm cột BranchID (nullable)';
+    PRINT '';
+END
+ELSE
+BEGIN
+    PRINT '[Bước 1] Cột BranchID đã tồn tại - bỏ qua';
+    PRINT '';
+END
+GO
+
+-- =============================================
+-- Bước 2: Cập nhật BranchID cho các booking hiện có
+-- Logic ưu tiên:
+--   1. Lấy từ Invoice gần nhất của Customer (nếu có)
+--      → Vì Invoice đã có BranchID và là dữ liệu chính xác nhất
+--   2. Lấy từ CheckHealth gần nhất của Pet (qua DoctorID)
+--      → Backup nếu không có Invoice
+--   3. Lấy từ Pet Owner's lastest activity
+--      → Dựa vào Invoice của customer
+--   4. Lấy chi nhánh đầu tiên trong hệ thống
+--      → Default fallback
+-- =============================================
+
+PRINT '[Bước 2] Cập nhật BranchID cho các booking hiện có...';
+PRINT '';
+
+DECLARE @UpdatedRows INT = 0;
+
+-- Cập nhật BranchID
+UPDATE b
+SET b.BranchID = COALESCE(
+    -- Priority 1: Lấy từ Invoice gần nhất của Customer
+    (SELECT TOP 1 i.BranchID
+     FROM Invoice i
+     WHERE i.CustomerID = b.CustomerID
+     AND i.Status = 'Paid'  -- Chỉ lấy invoice đã thanh toán
+     ORDER BY i.InvoiceDate DESC),
+    
+    -- Priority 2: Lấy từ Invoice bất kỳ của Customer
+    (SELECT TOP 1 i.BranchID
+     FROM Invoice i
+     WHERE i.CustomerID = b.CustomerID
+     ORDER BY i.InvoiceDate DESC),
+    
+    -- Priority 3: Lấy từ CheckHealth gần nhất của Pet
+    (SELECT TOP 1 e.BranchID 
+     FROM CheckHealth ch
+     INNER JOIN Employee e ON ch.DoctorID = e.EmployeeID
+     WHERE ch.PetID = b.PetID
+     ORDER BY ch.CheckDate DESC),
+    
+    -- Priority 4: Lấy từ Employee (bác sĩ) đầu tiên có vị trí là bác sĩ
+    (SELECT TOP 1 e.BranchID
+     FROM Employee e
+     INNER JOIN Position p ON e.PositionID = p.PositionID
+     WHERE p.Name LIKE N'%Bác sĩ%' OR p.Name LIKE N'%Doctor%'
+     ORDER BY e.EmployeeID),
+    
+    -- Priority 5: Lấy chi nhánh đầu tiên trong hệ thống
+    (SELECT TOP 1 BranchID FROM Branch ORDER BY BranchID)
+)
+FROM Booking b
+WHERE b.BranchID IS NULL;
+
+SET @UpdatedRows = @@ROWCOUNT;
+
+PRINT '✓ Đã cập nhật BranchID cho ' + CAST(@UpdatedRows AS VARCHAR) + ' booking';
+PRINT '';
+GO
+
+PRINT '✓ Đã cập nhật BranchID cho ' + CAST(@UpdatedRows AS VARCHAR) + ' booking';
+PRINT '';
+GO
+
+-- =============================================
+-- Bước 3: Kiểm tra dữ liệu sau khi cập nhật
+-- =============================================
+PRINT '[Bước 3] Kiểm tra dữ liệu...';
+PRINT '';
+
+-- Kiểm tra còn booking nào chưa có BranchID
+DECLARE @NullCount INT;
+SELECT @NullCount = COUNT(*)
+FROM Booking
+WHERE BranchID IS NULL;
+
+IF @NullCount > 0
+BEGIN
+    PRINT '⚠ CẢNH BÁO: Còn ' + CAST(@NullCount AS VARCHAR) + ' booking chưa có BranchID';
+    PRINT '  Cần kiểm tra dữ liệu trước khi thêm ràng buộc NOT NULL';
+    PRINT '';
+END
+ELSE
+BEGIN
+    PRINT '✓ Tất cả booking đã có BranchID';
+    PRINT '';
+END
+
+-- =============================================
+-- Bước 4: Thêm ràng buộc NOT NULL (nếu tất cả đã có BranchID)
+-- =============================================
+IF @NullCount = 0
+BEGIN
+    PRINT '[Bước 4] Thêm ràng buộc NOT NULL...';
+    
+    -- Kiểm tra xem cột đã là NOT NULL chưa
+    IF EXISTS (
+        SELECT 1 
+        FROM sys.columns 
+        WHERE object_id = OBJECT_ID('dbo.Booking') 
+        AND name = 'BranchID' 
+        AND is_nullable = 1
+    )
+    BEGIN
+        ALTER TABLE dbo.Booking
+        ALTER COLUMN BranchID INT NOT NULL;
+        
+        PRINT '✓ Đã thêm ràng buộc NOT NULL cho BranchID';
+        PRINT '';
+    END
+    ELSE
+    BEGIN
+        PRINT '✓ BranchID đã có ràng buộc NOT NULL';
+        PRINT '';
+    END
+END
+ELSE
+BEGIN
+    PRINT '[Bước 4] Bỏ qua - chưa thể thêm NOT NULL do còn giá trị NULL';
+    PRINT '';
+END
+GO
+
+-- =============================================
+-- Bước 5: Thêm Foreign Key constraint
+-- =============================================
+PRINT '[Bước 5] Thêm Foreign Key constraint...';
+
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.foreign_keys 
+    WHERE name = 'FK_Booking_Branch' 
+    AND parent_object_id = OBJECT_ID('dbo.Booking')
+)
+BEGIN
+    ALTER TABLE dbo.Booking
+    ADD CONSTRAINT FK_Booking_Branch
+    FOREIGN KEY (BranchID) REFERENCES Branch(BranchID);
+    
+    PRINT '✓ Đã thêm Foreign Key constraint FK_Booking_Branch';
+    PRINT '';
+END
+ELSE
+BEGIN
+    PRINT '✓ Foreign Key constraint FK_Booking_Branch đã tồn tại';
+    PRINT '';
+END
+GO
+
+-- =============================================
+-- Bước 6: Cập nhật Stored Procedure sp_Booking_Create
+-- =============================================
+PRINT '[Bước 6] Cập nhật stored procedure...';
+
+IF OBJECT_ID('dbo.sp_Booking_Create', 'P') IS NOT NULL
+BEGIN
+    DROP PROCEDURE dbo.sp_Booking_Create;
+    PRINT '✓ Đã xóa sp_Booking_Create cũ';
+END
+
+-- Tạo lại với tham số BranchID
+EXEC('
+CREATE PROC sp_Booking_Create
+@CustomerID INT,
+@PetID INT,
+@BranchID INT,
+@BookingType NVARCHAR(50),
+@RequestedDateTime DATETIME,
+@Status NVARCHAR(20),
+@Notes NVARCHAR(255)
+AS
+BEGIN
+    -- Kiểm tra tồn tại
+    IF NOT EXISTS (SELECT 1 FROM Customer WHERE CustomerID=@CustomerID)
+    BEGIN
+        RAISERROR(N''Khách hàng không tồn tại'',16,1)
+        RETURN
+    END
+    
+    IF NOT EXISTS (SELECT 1 FROM Pet WHERE PetID=@PetID)
+    BEGIN
+        RAISERROR(N''Thú cưng không tồn tại'',16,1)
+        RETURN
+    END
+    
+    IF NOT EXISTS (SELECT 1 FROM Branch WHERE BranchID=@BranchID)
+    BEGIN
+        RAISERROR(N''Chi nhánh không tồn tại'',16,1)
+        RETURN
+    END
+    
+    -- Insert booking
+    INSERT INTO Booking
+    (CustomerID, PetID, BranchID, BookingType, RequestedDateTime, Status, Notes)
+    VALUES(@CustomerID, @PetID, @BranchID, @BookingType, @RequestedDateTime, @Status, @Notes)
+    
+    -- Trả về BookingID vừa tạo
+    SELECT SCOPE_IDENTITY() AS NewBookingID
+END
+');
+
+PRINT '✓ Đã cập nhật sp_Booking_Create với tham số BranchID';
+PRINT '';
+GO
+
+-- =============================================
+-- Bước 7: Đảm bảo tất cả Booking có BranchID (fallback cuối)
+-- =============================================
+PRINT '[Bước 7] Đảm bảo tất cả Booking có BranchID...';
+PRINT '';
+
+-- Cập nhật các booking còn NULL thành branch 1
+UPDATE Booking
+SET BranchID = 1
+WHERE BranchID IS NULL;
+
+PRINT '✓ Đã đảm bảo tất cả Booking có BranchID';
+PRINT '';
+
+-- =============================================
+-- Bước 8: Báo cáo tổng quan
+-- =============================================
+PRINT '[Bước 8] Báo cáo tổng quan...';
+PRINT '';
+PRINT '--- Thống kê Booking theo Chi nhánh ---';
+
+SELECT 
+    b.Name AS TenChiNhanh,
+    COUNT(bk.BookingID) as TongSoBooking,
+    COUNT(CASE WHEN bk.Status = 'Pending' THEN 1 END) as ChoXacNhan,
+    COUNT(CASE WHEN bk.Status = 'Confirmed' THEN 1 END) as DaXacNhan,
+    COUNT(CASE WHEN bk.Status = 'Completed' THEN 1 END) as DaHoanThanh,
+    COUNT(CASE WHEN bk.Status = 'Cancelled' THEN 1 END) as DaHuy
+FROM Branch b
+LEFT JOIN Booking bk ON b.BranchID = bk.BranchID
+GROUP BY b.BranchID, b.Name
+ORDER BY b.BranchID;
+
+PRINT '';
+PRINT '========================================';
+PRINT 'HOÀN THÀNH MIGRATION';
+PRINT '========================================';
+GO
+
+
+-- ============================================
+-- Gán DoctorID với Load Balancing
+-- ============================================
+
+ALTER TABLE Booking 
+ADD DoctorID INT NULL;
+
+ALTER TABLE Booking
+ADD CONSTRAINT FK_Booking_Employee 
+FOREIGN KEY (DoctorID) REFERENCES Employee(EmployeeID);
+
+-- Bước 1: Xác nhận số booking cần gán
+SELECT COUNT(*) AS BookingNeedDoctor
+FROM Booking
+WHERE DoctorID IS NULL
+  AND BranchID IS NOT NULL
+  AND Status IN ('Pending', 'Confirmed');
+
+-- Bước 2: Gán DoctorID tối ưu (Round-Robin)
+WITH BookingsToAssign AS (
+    SELECT 
+        BookingID,
+        BranchID,
+        ROW_NUMBER() OVER (PARTITION BY BranchID ORDER BY BookingID) AS RowNum
+    FROM Booking
+    WHERE DoctorID IS NULL
+      AND BranchID IS NOT NULL
+      AND Status IN ('Pending', 'Confirmed')
+),
+DoctorsPerBranch AS (
+    SELECT 
+        EmployeeID,
+        BranchID,
+        ROW_NUMBER() OVER (PARTITION BY BranchID ORDER BY EmployeeID) AS DoctorRank
+    FROM Employee
+    WHERE PositionID = 1
+),
+AssignedDoctors AS (
+    SELECT 
+        BA.BookingID,
+        DB.EmployeeID,
+        ((BA.RowNum - 1) % (SELECT COUNT(*) FROM DoctorsPerBranch DP WHERE DP.BranchID = BA.BranchID) + 1) AS ModRank
+    FROM BookingsToAssign BA
+    CROSS JOIN DoctorsPerBranch DB
+    WHERE BA.BranchID = DB.BranchID
+      AND DB.DoctorRank = ((BA.RowNum - 1) % (SELECT COUNT(*) FROM DoctorsPerBranch DP WHERE DP.BranchID = BA.BranchID) + 1)
+)
+UPDATE B
+SET B.DoctorID = AD.EmployeeID
+FROM Booking B
+INNER JOIN AssignedDoctors AD ON B.BookingID = AD.BookingID;
+---------------------------------------------------------------------

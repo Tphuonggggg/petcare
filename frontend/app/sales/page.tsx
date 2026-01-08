@@ -118,10 +118,11 @@ export default function SalesDashboard() {
 
   const getStatusBadge = (status: string) => {
     const config = {
-      completed: { label: "Hoàn thành", class: "bg-green-100 text-green-800" },
+      paid: { label: "Đã thanh toán", class: "bg-green-100 text-green-800" },
+      completed: { label: "Đã thanh toán", class: "bg-green-100 text-green-800" },
       pending: { label: "Chờ xử lý", class: "bg-orange-100 text-orange-800" },
       processing: { label: "Đang xử lý", class: "bg-blue-100 text-blue-800" },
-      paid: { label: "Đã thanh toán", class: "bg-green-100 text-green-800" },
+      cancelled: { label: "Đã hủy", class: "bg-red-100 text-red-800" },
     }
     const statusLower = (status || "pending").toLowerCase()
     const badgeConfig = config[statusLower as keyof typeof config] || { label: status || "Chờ xử lý", class: "bg-gray-100 text-gray-800" }
@@ -204,7 +205,7 @@ export default function SalesDashboard() {
             onClick={() => router.push("/sales/orders")}
           >
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Đơn hàng hôm nay</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Đơn hàng (7 ngày)</CardTitle>
               <ShoppingCart className={`h-5 w-5 text-blue-600`} />
             </CardHeader>
             <CardContent>
@@ -227,27 +228,14 @@ export default function SalesDashboard() {
 
           <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => router.push("/sales/orders?filter=completed")}
+            onClick={() => router.push("/sales/orders?filter=paid")}
           >
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Đã hoàn thành</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Đã thanh toán</CardTitle>
               <Package className={`h-5 w-5 text-green-600`} />
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">{summary.completedOrders}</div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => router.push("/sales/reports")}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Doanh thu hôm nay</CardTitle>
-              <DollarSign className={`h-5 w-5 text-green-600`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{(summary.totalRevenue / 1000000).toFixed(1)}M</div>
             </CardContent>
           </Card>
         </div>
@@ -258,7 +246,7 @@ export default function SalesDashboard() {
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle>Đơn hàng gần đây</CardTitle>
-                  <CardDescription>Các giao dịch trong ngày hôm nay</CardDescription>
+                  <CardDescription>Các giao dịch trong 30 ngày gần đây</CardDescription>
                 </div>
                 <Button onClick={() => router.push("/sales/orders")}>Xem tất cả</Button>
               </div>
@@ -267,7 +255,7 @@ export default function SalesDashboard() {
               <div className="space-y-4">
                 {recentOrders.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    Không có đơn hàng nào hôm nay
+                    Không có đơn hàng gần đây
                   </div>
                 ) : (
                   recentOrders.slice(0, 4).map((order) => (
@@ -338,14 +326,6 @@ export default function SalesDashboard() {
                 <Button
                   variant="outline"
                   className="w-full justify-start bg-transparent"
-                  onClick={() => router.push("/sales/reports")}
-                >
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  Báo cáo doanh số
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start bg-transparent"
                   onClick={() => router.push("/sales/orders?filter=pending")}
                 >
                   <AlertCircle className="h-4 w-4 mr-2" />
@@ -369,7 +349,7 @@ export default function SalesDashboard() {
                   </div>
                   <div className="p-3 bg-muted rounded-lg">
                     <div className="flex justify-between items-center">
-                      <p className="text-sm text-muted-foreground">Đơn hàng hoàn thành</p>
+                      <p className="text-sm text-muted-foreground">Đơn hàng đã thanh toán</p>
                       <p className="font-bold text-green-600 text-lg">{summary.completedOrders}</p>
                     </div>
                   </div>
@@ -379,13 +359,6 @@ export default function SalesDashboard() {
                       <p className="font-bold text-orange-600 text-lg">{summary.pendingOrders}</p>
                     </div>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    className="w-full bg-transparent"
-                    onClick={() => router.push("/sales/reports")}
-                  >
-                    Xem chi tiết báo cáo
-                  </Button>
                 </div>
               </CardContent>
             </Card>

@@ -5,7 +5,7 @@ namespace PetCareX.Api.Dtos;
 
 /// <summary>
 /// DTO for employee branch assignment history.
-/// </summary>
+/// </summary>s
 public class EmployeeHistoryDto
 {
     /// <summary>Employee primary key.</summary>

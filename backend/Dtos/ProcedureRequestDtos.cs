@@ -343,6 +343,8 @@ public class CreateCheckHealthDto
 
     [DataType(DataType.DateTime)]
     public DateTime? FollowUpDate { get; set; }
+
+    public int? BookingId { get; set; }
 }
 
 /// <summary>

@@ -31,7 +31,7 @@ export default function CheckInPage() {
     try {
       setLoading(true)
       const branchId = localStorage.getItem('branchId') || '1'
-      const data = await apiGet(`/ReceptionistDashboard/waiting-customers?branchId=${branchId}`)
+      const data = await apiGet(`/receptionistdashboard/waiting-customers?branchId=${branchId}`)
       setWaitingCustomers(data || [])
     } catch (error) {
       console.error("Error loading waiting customers:", error)
@@ -57,7 +57,7 @@ export default function CheckInPage() {
       })
       
       // Cập nhật booking status - dùng check-in endpoint
-      await apiPost(`/ReceptionistDashboard/check-in/${customer.bookingId}`, {
+      await apiPost(`/receptionistdashboard/check-in/${customer.bookingId}`, {
         employeeId: employeeId
       })
       

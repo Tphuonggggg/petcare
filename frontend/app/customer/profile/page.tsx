@@ -12,18 +12,7 @@ import { toast } from '@/hooks/use-toast'
 
 export default function CustomerProfilePage() {
   const router = useRouter()
-  const [user, setUser] = useState<any>({
-    customerId: undefined,
-    fullName: "Nguyễn Văn A",
-    email: "nguyenvana@email.com",
-    phone: "0901234567",
-    address: "123 Nguyễn Trãi, Quận 1, TP.HCM",
-    membershipTier: "VIP",
-    pointsBalance: 1500,
-    birthDate: undefined,
-    gender: undefined,
-    memberSince: undefined,
-  })
+  const [user, setUser] = useState<any>({})
   const [useMocksFlag, setUseMocksFlag] = useState<boolean>(false)
   const [bookings, setBookings] = useState<any[]>([])
   const [invoices, setInvoices] = useState<any[]>([])
@@ -35,33 +24,8 @@ export default function CustomerProfilePage() {
   useEffect(() => {
     const userData = localStorage.getItem("user")
     const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams('')
-    const mocksFromQuery = urlParams.get('useMocks') === 'true'
-    const mocks = mocksFromQuery || localStorage.getItem('useMocks') === 'true'
-    setUseMocksFlag(mocks)
     if (!userData) {
-      // if `?useMocks=true` was provided, persist it so subsequent navigation keeps mocks
-      if (mocksFromQuery) {
-        try { localStorage.setItem('useMocks', 'true') } catch {}
-      }
-      // if no stored user but mocks are enabled, try load mock customer 1
-      if (mocks) {
-        ;(async () => {
-          try {
-            const { apiGet } = await import('@/lib/api')
-            const data = await apiGet('/customers/1')
-            if (data) {
-              localStorage.setItem('user', JSON.stringify(data))
-              setUser(data)
-              return
-            }
-          } catch (e) {
-            // ignore
-          }
-        })()
-      } else {
-        router.push("/login")
-        return
-      }
+      router.push("/login")
       return
     }
     const parsed = JSON.parse(userData)
@@ -212,28 +176,7 @@ export default function CustomerProfilePage() {
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        {!useMocksFlag && (
-          <div className="mb-4 p-3 rounded-md bg-yellow-50 border border-yellow-200 flex items-center justify-between">
-            <div className="text-sm text-yellow-800">Chạy giao diện không phụ thuộc backend? Bạn có thể bật chế độ mock để thử nghiệm UI.</div>
-            <div>
-              <Button onClick={async () => {
-                try {
-                  localStorage.setItem('useMocks', 'true')
-                  setUseMocksFlag(true)
-                  const { apiGet } = await import('@/lib/api')
-                  const data = await apiGet('/customers/1')
-                  if (data) {
-                    localStorage.setItem('user', JSON.stringify(data))
-                    setUser(data)
-                    toast({ title: 'Mock bật', description: 'Dữ liệu mock đã được nạp.' })
-                  }
-                } catch (err) {
-                  toast({ title: 'Lỗi', description: 'Không thể nạp dữ liệu mock.' , variant: 'destructive'})
-                }
-              }}>Bật mock UI</Button>
-            </div>
-          </div>
-        )}
+        {/* Đã xóa hoàn toàn thông báo mock UI */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Hồ sơ của tôi</h1>
           <p className="text-muted-foreground">Quản lý thông tin cá nhân và ưu đãi</p>

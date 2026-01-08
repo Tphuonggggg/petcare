@@ -56,13 +56,31 @@ export default function BookingsPage() {
       try {
         const { apiGet } = await import('@/lib/api')
         const branchId = getSelectedBranchId()
-        const branchName = getSelectedBranchName()
-        const data = branchId ? await apiGet('/bookings?branchId=' + encodeURIComponent(branchId)) : await apiGet('/bookings')
-        if (mounted && Array.isArray(data)) {
-          const filtered = branchId ? data.filter((b: any) => String(b.branchId ?? b.branch) === String(branchId) || String(b.branchName ?? b.branch) === String(branchName)) : data
-          setBookings(filtered)
+        const data = branchId ? await apiGet('/bookings?branchId=' + branchId) : await apiGet('/bookings')
+        
+        if (mounted) {
+          // Handle both array and paginated response
+          let items = Array.isArray(data) ? data : (data?.items || [])
+          
+          // Transform API response to match UI expectations
+          const transformed = items.map((b: any) => ({
+            id: b.bookingId,
+            bookingId: b.bookingId,
+            date: b.requestedDateTime ? new Date(b.requestedDateTime).toISOString().split('T')[0] : '',
+            time: b.requestedDateTime ? new Date(b.requestedDateTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '',
+            customer: b.customerName || '',
+            pet: b.petName || '',
+            service: b.serviceType || 'Dịch vụ',
+            branch: b.branchName || '',
+            status: b.status || 'Pending',
+            employee: b.employeeName || '',
+            ...b // Keep original fields too
+          }))
+          
+          setBookings(transformed)
         }
       } catch (e) {
+        console.error('Error loading bookings:', e)
         // keep mockBookings on error
       } finally {
         if (mounted) setLoading(false)
@@ -77,15 +95,37 @@ export default function BookingsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Đã xác nhận":
+      case "Confirmed":
         return "bg-green-100 text-green-700"
       case "Chờ xác nhận":
+      case "Pending":
+      case "pending":
         return "bg-yellow-100 text-yellow-700"
       case "Đã hủy":
+      case "Cancelled":
         return "bg-red-100 text-red-700"
       case "Hoàn thành":
+      case "Completed":
         return "bg-blue-100 text-blue-700"
       default:
         return "bg-gray-100 text-gray-700"
+    }
+  }
+
+  // Map status tiếng Anh sang tiếng Việt để hiển thị
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "Pending":
+      case "pending":
+        return "Chờ xác nhận"
+      case "Confirmed":
+        return "Đã xác nhận"
+      case "Cancelled":
+        return "Đã hủy"
+      case "Completed":
+        return "Hoàn thành"
+      default:
+        return status
     }
   }
 
@@ -128,7 +168,7 @@ export default function BookingsPage() {
                       {customer} - {pet}
                     </p>
                   </div>
-                  <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
+                  <Badge className={getStatusColor(booking.status)}>{getStatusLabel(booking.status)}</Badge>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -149,7 +189,7 @@ export default function BookingsPage() {
                   <Button variant="outline" size="sm">
                     Chỉnh sửa
                   </Button>
-                  {booking.status === "Chờ xác nhận" && <Button size="sm">Xác nhận</Button>}
+                  {(getStatusLabel(booking.status) === "Chờ xác nhận") && <Button size="sm">Xác nhận</Button>}
                 </div>
               </div>
             </div>

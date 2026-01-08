@@ -16,9 +16,15 @@ public class BookingDto
     [Required]
     public int CustomerId { get; set; }
 
+    /// <summary>Customer name (for display).</summary>
+    public string? CustomerName { get; set; }
+
     /// <summary>Pet associated with the booking.</summary>
     [Required]
     public int PetId { get; set; }
+
+    /// <summary>Pet name (for display).</summary>
+    public string? PetName { get; set; }
 
     /// <summary>Type of booking/service.</summary>
     [Required]
@@ -37,4 +43,19 @@ public class BookingDto
     /// <summary>Notes for the booking.</summary>
     [StringLength(500)]
     public string? Notes { get; set; }
-}
+
+    /// <summary>Branch ID where the booking is handled.</summary>
+    [Required]
+    public int BranchId { get; set; }
+
+    /// <summary>Branch name (for display).</summary>
+    public string? BranchName { get; set; }
+
+    /// <summary>Doctor ID assigned to this booking.</summary>
+    public int? DoctorId { get; set; }
+
+    /// <summary>Doctor name (for display).</summary>
+    public string? DoctorName { get; set; }
+
+    /// <summary>Employee name (for display).</summary>
+    public string? EmployeeName { get; set; }}

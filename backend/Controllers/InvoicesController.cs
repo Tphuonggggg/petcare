@@ -34,17 +34,31 @@ public class InvoicesController : ControllerBase
     /// Returns paginated invoices.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<PaginatedResult<InvoiceDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] int? branchId = null)
+    public async Task<ActionResult<PaginatedResult<InvoiceDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] int? branchId = null, [FromQuery] int? customerId = null)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 20;
-        var q = _context.Invoices.Include(i => i.Branch).Include(i => i.Customer).AsQueryable();
+        var q = _context.Invoices
+            .Include(i => i.Branch)
+            .Include(i => i.Customer)
+            .Include(i => i.InvoiceItems)
+                .ThenInclude(ii => ii.Product)
+            .AsQueryable();
         
         // Filter by branch if provided
         if (branchId.HasValue)
         {
             q = q.Where(i => i.BranchId == branchId.Value);
         }
+        
+        // Filter by customer if provided
+        if (customerId.HasValue)
+        {
+            q = q.Where(i => i.CustomerId == customerId.Value);
+        }
+        
+        // Order by InvoiceDate descending (newest first)
+        q = q.OrderByDescending(i => i.InvoiceDate).ThenByDescending(i => i.InvoiceId);
         
         var total = await q.CountAsync();
         var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
@@ -78,69 +92,99 @@ public class InvoicesController : ControllerBase
     {
         try
         {
-            // Lưu ngày hôm nay (chỉ date, không time) hoặc dùng ngày từ DTO
-            var invoiceDate = dto.InvoiceDate ?? DateTime.UtcNow.Date;
-            var paymentMethod = dto.PaymentMethod ?? "CASH";
+            // Validate required fields
+            if (!dto.BranchId.HasValue || dto.BranchId.Value <= 0)
+                return BadRequest(new { error = "BranchId is required and must be greater than 0" });
+            
+            if (!dto.CustomerId.HasValue || dto.CustomerId.Value <= 0)
+                return BadRequest(new { error = "CustomerId is required and must be greater than 0" });
+            
+            if (string.IsNullOrEmpty(dto.PaymentMethod))
+                return BadRequest(new { error = "PaymentMethod is required" });
+
+            // Sử dụng thời gian từ DTO hoặc thời gian hiện tại của server (có cả giờ phút giây)
+            var invoiceDate = dto.InvoiceDate ?? DateTime.UtcNow;
+            var paymentMethod = dto.PaymentMethod;
             var status = dto.Status ?? "Pending";
 
-            var parameters = new[]
+            // Get an employee from the branch if not specified
+            int employeeId = dto.EmployeeId ?? 0;
+            if (employeeId == 0 && dto.BranchId.HasValue)
             {
-                new SqlParameter("@BranchId", dto.BranchId ?? 0),
-                new SqlParameter("@CustomerId", dto.CustomerId ?? 0),
-                new SqlParameter("@EmployeeId", dto.EmployeeId ?? 0),
-                new SqlParameter("@PetId", dto.PetId ?? (object)DBNull.Value),
-                new SqlParameter("@InvoiceDate", invoiceDate),
-                new SqlParameter("@TotalAmount", 0), // Let trigger calculate TotalAmount from InvoiceItems
-                new SqlParameter("@DiscountAmount", dto.DiscountAmount ?? 0),
-                new SqlParameter("@FinalAmount", dto.FinalAmount ?? 0),
-                new SqlParameter("@PaymentMethod", paymentMethod),
-                new SqlParameter("@Status", status)
-            };
-
-            var sql = @"
-                INSERT INTO Invoice 
-                (BranchId, CustomerId, EmployeeId, PetId, InvoiceDate, TotalAmount, DiscountAmount, PaymentMethod, Status)
-                VALUES 
-                (@BranchId, @CustomerId, @EmployeeId, @PetId, @InvoiceDate, @TotalAmount, @DiscountAmount, @PaymentMethod, @Status);
-                
-                SELECT CAST(SCOPE_IDENTITY() as int);";
-
-            var invoiceId = _context.Database.SqlQueryRaw<int>(sql, parameters).AsEnumerable().FirstOrDefault();
-
-            if (invoiceId <= 0)
-            {
-                return BadRequest(new { error = "Failed to create invoice" });
+                var employee = await _context.Employees
+                    .Where(e => e.BranchId == dto.BranchId.Value)
+                    .FirstOrDefaultAsync();
+                if (employee != null)
+                {
+                    employeeId = employee.EmployeeId;
+                }
+                else
+                {
+                    return BadRequest(new { error = "No employee found in this branch" });
+                }
             }
+
+            // Use a simpler approach - execute SELECT MAX(InvoiceID) after INSERT within transaction
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                await _context.Database.ExecuteSqlRawAsync(@"
+                    INSERT INTO Invoice (BranchID, CustomerID, EmployeeID, PetID, InvoiceDate, TotalAmount, DiscountAmount, PaymentMethod, Status)
+                    VALUES ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8})",
+                    new object?[] {
+                        dto.BranchId ?? 0,
+                        dto.CustomerId ?? 0, 
+                        employeeId,
+                        (object?)dto.PetId,
+                        invoiceDate,
+                        1.00m,
+                        dto.DiscountAmount ?? 0,
+                        paymentMethod ?? "CASH",
+                        status ?? "Pending"
+                    }.Cast<object>().ToArray());
+
+                // Get the last inserted InvoiceID from database
+                var lastInvoice = await _context.Invoices
+                    .OrderByDescending(i => i.InvoiceId)
+                    .FirstOrDefaultAsync();
+                
+                int invoiceId = lastInvoice?.InvoiceId ?? 0;
+                
+                if (invoiceId <= 0)
+                {
+                    await transaction.RollbackAsync();
+                    return BadRequest(new { error = "Failed to create invoice - could not retrieve ID" });
+                }
 
             // Add invoice items if provided
             if (dto.Items != null && dto.Items.Count > 0)
             {
                 foreach (var item in dto.Items)
                 {
-                    var itemParams = new[]
-                    {
-                        new SqlParameter("@InvoiceId", invoiceId),
-                        new SqlParameter("@ProductId", item.ProductId ?? (object)DBNull.Value),
-                        new SqlParameter("@ServiceId", item.ServiceId ?? (object)DBNull.Value),
-                        new SqlParameter("@ItemType", item.ItemType ?? "PRODUCT"),
-                        new SqlParameter("@Quantity", item.Quantity ?? 1),
-                        new SqlParameter("@UnitPrice", item.UnitPrice ?? 0)
-                    };
-
-                    var itemSql = @"
-                        INSERT INTO InvoiceItem 
-                        (InvoiceId, ProductId, ServiceId, ItemType, Quantity, UnitPrice)
-                        VALUES 
-                        (@InvoiceId, @ProductId, @ServiceId, @ItemType, @Quantity, @UnitPrice)";
-                    
-                    await _context.Database.ExecuteSqlRawAsync(itemSql, itemParams);
+                    await _context.Database.ExecuteSqlRawAsync(@"
+                        INSERT INTO InvoiceItem (InvoiceID, ProductID, ServiceID, ItemType, Quantity, UnitPrice)
+                        VALUES ({0}, {1}, {2}, {3}, {4}, {5})",
+                        new object?[] {
+                            invoiceId,
+                            (object?)item.ProductId,
+                            (object?)item.ServiceId,
+                            item.ItemType ?? "PRODUCT",
+                            item.Quantity ?? 1,
+                            item.UnitPrice ?? 0
+                        }.Cast<object>().ToArray());
                 }
             }
 
-            // Fetch the created invoice
+            await transaction.CommitAsync();
+
+            // Fetch the created invoice with all related data
             var createdInvoice = await _context.Invoices
                 .Include(i => i.Customer)
                 .Include(i => i.Branch)
+                .Include(i => i.InvoiceItems)
+                    .ThenInclude(ii => ii.Product)
+                .Include(i => i.InvoiceItems)
+                    .ThenInclude(ii => ii.Service)
                 .FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
 
             if (createdInvoice == null)
@@ -148,6 +192,12 @@ public class InvoicesController : ControllerBase
 
             var mappedResult = _mapper.Map<InvoiceDto>(createdInvoice);
             return CreatedAtAction(nameof(Get), new { id = invoiceId }, mappedResult);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
         catch (Exception ex)
         {
@@ -222,6 +272,6 @@ public class InvoicesController : ControllerBase
 
 public class UpdateStatusRequest
 {
-    public string Status { get; set; }
+    public string Status { get; set; } = null!;
 }
 

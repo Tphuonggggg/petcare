@@ -21,22 +21,82 @@ public class BookingsController : ControllerBase
     private readonly IMapper _mapper;
 
     /// <summary>
+    /// Returns detailed booking info by id (include customer, pet, branch, doctor).
+    /// </summary>
+    [HttpGet("detail/{id}")]
+    public async Task<ActionResult<BookingDetailDto>> GetDetail(int id)
+    {
+        var booking = await _context.Bookings
+            .Include(b => b.Customer)
+            .Include(b => b.Pet)
+            .Include(b => b.Branch)
+            .Include(b => b.Doctor)
+            .FirstOrDefaultAsync(b => b.BookingId == id);
+        if (booking == null) return NotFound();
+
+        var dto = new BookingDetailDto
+        {
+            BookingId = booking.BookingId,
+            BookingTime = booking.RequestedDateTime,
+            CustomerName = booking.Customer?.FullName ?? "N/A",
+            CustomerPhone = booking.Customer?.Phone ?? "N/A",
+            CustomerEmail = booking.Customer?.Email ?? "N/A",
+            PetName = booking.Pet?.Name ?? "N/A",
+            PetType = booking.Pet?.Species ?? "N/A",
+            BranchName = booking.Branch?.Name ?? "N/A",
+            DoctorName = booking.Doctor?.FullName ?? "N/A",
+            ServiceType = booking.BookingType,
+            Status = booking.Status,
+            Notes = booking.Notes
+        };
+        return dto;
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="BookingsController"/> class.
     /// </summary>
     public BookingsController(ApplicationDbContext context, IMapper mapper) { _context = context; _mapper = mapper; }
 
     /// <summary>
-    /// Returns paginated booking records.
+    /// Returns paginated booking records, optionally filtered by branch.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<PaginatedResult<BookingDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<ActionResult<PaginatedResult<BookingDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] int? branchId = null)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 20;
-        var q = _context.Bookings.AsQueryable();
+        var q = _context.Bookings
+            .Include(b => b.Customer)
+            .Include(b => b.Pet)
+            .Include(b => b.Branch)
+            .Include(b => b.Doctor)
+            .AsQueryable();
+        
+        // Filter by branch if provided
+        if (branchId.HasValue)
+        {
+            q = q.Where(b => b.BranchId == branchId.Value);
+        }
+        
         var total = await q.CountAsync();
         var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
-        var dtos = _mapper.Map<List<BookingDto>>(items);
+        var dtos = items.Select(b => new BookingDto
+        {
+            BookingId = b.BookingId,
+            CustomerId = b.CustomerId,
+            CustomerName = b.Customer?.FullName,
+            PetId = b.PetId,
+            PetName = b.Pet?.Name,
+            BookingType = b.BookingType,
+            RequestedDateTime = b.RequestedDateTime,
+            Status = b.Status,
+            Notes = b.Notes,
+            BranchId = b.BranchId,
+            BranchName = b.Branch?.Name,
+            DoctorId = b.DoctorId,
+            DoctorName = b.Doctor?.FullName,
+            EmployeeName = null // Can be populated from CheckHealth or Invoice if needed
+        }).ToList();
         return new PaginatedResult<BookingDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }
 
@@ -53,13 +113,59 @@ public class BookingsController : ControllerBase
 
     /// <summary>
     /// Creates a new booking.
+    /// When branchId is provided, automatically creates a draft invoice for that branch.
+    /// If DoctorId is null, automatically assigns a doctor from the same branch using load-balancing.
+    /// This ensures the booking shows up in the correct branch immediately.
     /// </summary>
     [HttpPost]
     public async Task<ActionResult<BookingDto>> Post(BookingDto dto)
     {
         var entity = _mapper.Map<Booking>(dto);
+        
+        Console.WriteLine($"[BOOKING CREATE] BranchId={entity.BranchId}, CustomerId={entity.CustomerId}, DoctorId={entity.DoctorId}");
+        
+        // Auto-assign doctor from same branch if not specified
+        if (entity.DoctorId == null && entity.BranchId > 0)
+        {
+            try
+            {
+                var assignedDoctorId = await _context.Database.SqlQueryRaw<int?>($@"
+                    DECLARE @BranchID INT = {entity.BranchId};
+                    
+                    -- Find the doctor with least bookings in this branch
+                    SELECT TOP 1 e.EmployeeID
+                    FROM Employee e
+                    WHERE e.BranchID = @BranchID 
+                      AND e.PositionID = 1
+                      AND e.Status = 1
+                    ORDER BY (
+                        SELECT COUNT(*) 
+                        FROM Booking b 
+                        WHERE b.DoctorID = e.EmployeeID 
+                          AND b.Status IN ('Pending', 'Confirmed')
+                    ) ASC, e.EmployeeID ASC
+                ").FirstOrDefaultAsync();
+                
+                Console.WriteLine($"[BOOKING CREATE] Auto-assign result: {(assignedDoctorId.HasValue ? assignedDoctorId.Value.ToString() : "NULL")}");
+                
+                if (assignedDoctorId.HasValue && assignedDoctorId > 0)
+                {
+                    entity.DoctorId = assignedDoctorId.Value;
+                    Console.WriteLine($"[BOOKING CREATE] Assigned doctor {entity.DoctorId}");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the booking creation
+                Console.WriteLine($"[BOOKING CREATE] Error auto-assigning doctor: {ex.Message}");
+            }
+        }
+        
         _context.Bookings.Add(entity);
         await _context.SaveChangesAsync();
+        
+        Console.WriteLine($"[BOOKING CREATE] Final DoctorId={entity.DoctorId}, BookingId={entity.BookingId}");
+        
         var result = _mapper.Map<BookingDto>(entity);
         return CreatedAtAction(nameof(Get), new { id = entity.BookingId }, result);
     }
@@ -82,15 +188,15 @@ public class BookingsController : ControllerBase
         if (dto.RequestedDateTime < minDate || dto.RequestedDateTime > maxDate)
             return BadRequest("RequestedDateTime must be between 1753-01-01 and 9999-12-31");
         
-        // Use raw SQL to bypass trigger OUTPUT clause issue
-        // Only update Status and Notes - don't touch FK fields
+        // Use raw SQL to update Status, Notes, and DoctorId
         try
         {
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
                 UPDATE Booking 
                 SET 
                     Status = {dto.Status},
-                    Notes = {dto.Notes}
+                    Notes = {dto.Notes},
+                    DoctorID = {dto.DoctorId}
                 WHERE BookingId = {id}
             ");
             return NoContent();

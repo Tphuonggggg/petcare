@@ -28,12 +28,30 @@ public class CheckHealthsController : ControllerBase
     public CheckHealthsController(ApplicationDbContext context, IMapper mapper) { _context = context; _mapper = mapper; }
 
     /// <summary>
-    /// Returns all health check records.
+    /// Returns health check records, optionally filtered by branch or petId.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<CheckHealthDto>>> Get()
+    public async Task<ActionResult<IEnumerable<CheckHealthDto>>> Get([FromQuery] int? branchId = null, [FromQuery] int? petId = null)
     {
-        var list = await _context.CheckHealths.ToListAsync();
+        var q = _context.CheckHealths.AsQueryable();
+        
+        // Filter by petId if provided
+        if (petId.HasValue)
+        {
+            q = q.Where(ch => ch.PetId == petId.Value);
+        }
+        
+        // Filter by branch if provided (via Doctor's BranchId)
+        if (branchId.HasValue)
+        {
+            q = q.Where(ch => ch.DoctorId.HasValue && 
+                             _context.Employees.Any(e => e.EmployeeId == ch.DoctorId && e.BranchId == branchId.Value));
+        }
+        
+        // Order by check date descending (newest first)
+        q = q.OrderByDescending(ch => ch.CheckDate);
+        
+        var list = await q.ToListAsync();
         return _mapper.Map<List<CheckHealthDto>>(list);
     }
 

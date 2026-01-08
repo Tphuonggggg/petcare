@@ -46,19 +46,19 @@ export default function DashboardPage() {
         const { apiGet } = await import('@/lib/api')
         
         // Load dashboard summary stats
-        const statsData = await apiGet('/ReceptionistDashboard/summary')
+        const statsData = await apiGet('/receptionistdashboard/summary')
         if (statsData) {
           setStats(statsData)
         }
         
         // Load today's bookings
-        const bookingsData = await apiGet('/ReceptionistDashboard/today-bookings')
+        const bookingsData = await apiGet('/receptionistdashboard/today-bookings')
         if (bookingsData && Array.isArray(bookingsData)) {
           setBookings(bookingsData.slice(0, 5)) // Show top 5
         }
         
         // Load recent customers
-        const customersData = await apiGet('/ReceptionistDashboard/recent-customers')
+        const customersData = await apiGet('/receptionistdashboard/recent-customers')
         if (customersData && Array.isArray(customersData)) {
           setRecentCustomers(customersData.slice(0, 3)) // Show top 3
         }

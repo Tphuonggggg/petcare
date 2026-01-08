@@ -16,19 +16,47 @@ builder.Services.AddSwaggerGen(options =>
     if (System.IO.File.Exists(xmlFile)) options.IncludeXmlComments(xmlFile);
     
     // Configure Swagger to respect JsonIgnore attributes
-    options.SchemaFilter<SwaggerIgnoreFilter>();
+    options.SchemaFilter<PetCareX.Api.SwaggerIgnoreFilter>();
 });
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlOptions => sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SingleQuery)));
+{
+    try
+    {
+        options.UseSqlServer(
+            builder.Configuration.GetConnectionString("DefaultConnection"),
+            sqlOptions => sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SingleQuery));
+        Console.WriteLine("✅ DbContext configured successfully");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ DbContext configuration error: {ex.Message}");
+        throw;
+    }
+});
 
 // AutoMapper
-builder.Services.AddAutoMapper(typeof(PetCareX.Api.Mapping.MappingProfile));
+try
+{
+    builder.Services.AddAutoMapper(typeof(PetCareX.Api.Mapping.MappingProfile));
+    Console.WriteLine("✅ AutoMapper configured successfully");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"❌ AutoMapper configuration error: {ex.Message}");
+}
 
 // Register Stored Procedure Service
-builder.Services.AddScoped<PetCareX.Api.Services.IStoredProcedureService, PetCareX.Api.Services.StoredProcedureService>();
+try
+{
+    builder.Services.AddScoped<PetCareX.Api.Services.IStoredProcedureService, PetCareX.Api.Services.StoredProcedureService>();
+    Console.WriteLine("✅ Stored Procedure Service registered successfully");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"❌ Stored Procedure Service registration error: {ex.Message}");
+}
+Console.WriteLine("⚠️ Stored Procedure Service temporarily disabled for testing");
 
 builder.Services.AddCors(options =>
 {
@@ -82,6 +110,22 @@ catch (Exception ex)
     Console.WriteLine("Failed to read startup configuration: " + ex);
 }
 
+// Add global exception handling middleware
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next.Invoke();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Request exception: {ex.Message}");
+        Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        context.Response.StatusCode = 500;
+        await context.Response.WriteAsync($"Error: {ex.Message}");
+    }
+});
+
 // Always enable Swagger for API documentation
 app.UseSwagger();
 app.UseSwaggerUI();
@@ -109,46 +153,4 @@ catch (Exception ex)
     // Ensure any startup exceptions are visible in console logs
     Console.WriteLine("Unhandled exception during host run: " + ex);
     throw;
-}
-
-/// <summary>
-/// Schema filter to exclude properties with JsonIgnore attribute from Swagger schema.
-/// </summary>
-public class SwaggerIgnoreFilter : Swashbuckle.AspNetCore.SwaggerGen.ISchemaFilter
-{
-    /// <summary>
-    /// Applies the filter to remove JsonIgnore properties.
-    /// </summary>
-    public void Apply(Microsoft.OpenApi.Models.OpenApiSchema schema, Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext context)
-    {
-        if (schema?.Properties == null || context.Type == null)
-            return;
-
-        var excludedProperties = context.Type.GetProperties()
-            .Where(t =>
-                t.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), true).Any())
-            .Select(d => d.Name.ToCamelCase());
-
-        foreach (var excludedProperty in excludedProperties)
-        {
-            if (schema.Properties.ContainsKey(excludedProperty))
-                schema.Properties.Remove(excludedProperty);
-        }
-    }
-}
-
-/// <summary>
-/// String extension methods.
-/// </summary>
-public static class StringExtensions
-{
-    /// <summary>
-    /// Converts a string to camelCase.
-    /// </summary>
-    public static string ToCamelCase(this string str)
-    {
-        if (string.IsNullOrEmpty(str) || char.IsLower(str[0]))
-            return str;
-        return char.ToLower(str[0]) + str.Substring(1);
-    }
 }

@@ -32,16 +32,54 @@ public class CustomersController : ControllerBase
     }
 
     /// <summary>
-    /// Returns paginated customers.
+    /// Returns paginated customers, optionally filtered by branch.
+    /// Search parameter searches across all branches.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<PaginatedResult<CustomerDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<ActionResult<PaginatedResult<CustomerDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] int? branchId = null)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 20;
         var q = _context.Customers.AsQueryable();
+        
+        // Server-side search by name (searches across all branches)
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            Console.WriteLine($"Searching for: '{search}'");
+            // Use EF.Functions.Like for better control over search
+            q = q.Where(c => EF.Functions.Like(c.FullName, $"%{search}%"));
+            
+            // Order by relevance: exact match first, then starts with, then contains
+            q = q.OrderByDescending(c => c.FullName == search)
+                 .ThenByDescending(c => c.FullName.StartsWith(search))
+                 .ThenBy(c => c.FullName);
+        }
+        else
+        {
+            // Filter by branch only when NOT searching
+            if (branchId.HasValue)
+            {
+                // Get customers who have invoices at this branch
+                var branchCustomerIds = await _context.Invoices
+                    .Where(i => i.BranchId == branchId.Value)
+                    .Select(i => i.CustomerId)
+                    .Distinct()
+                    .ToListAsync();
+                
+                q = q.Where(c => branchCustomerIds.Contains(c.CustomerId));
+            }
+            
+            q = q.OrderBy(c => c.CustomerId);
+        }
+        
         var total = await q.CountAsync();
         var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        
+        Console.WriteLine($"Found {total} customers, returning {items.Count} items");
+        if (items.Count > 0)
+        {
+            Console.WriteLine($"First result: '{items[0].FullName}'");
+        }
         var dtos = _mapper.Map<List<CustomerDto>>(items);
         return new PaginatedResult<CustomerDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }

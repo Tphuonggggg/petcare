@@ -17,6 +17,9 @@ public partial class Booking
     /// <summary>Pet associated with the booking.</summary>
     public int PetId { get; set; }
 
+    /// <summary>Branch where the booking is handled.</summary>
+    public int BranchId { get; set; }
+
     /// <summary>Type of booking/service requested.</summary>
     public string BookingType { get; set; } = null!;
 
@@ -32,12 +35,21 @@ public partial class Booking
     /// <summary>When the booking was created.</summary>
     public DateTime CreatedAt { get; set; }
 
+    /// <summary>Doctor assigned to this booking (nullable for cancelled/completed bookings).</summary>
+    public int? DoctorId { get; set; }
+
     /// <summary>History entries for the booking.</summary>
     public virtual ICollection<BookingHistory> BookingHistories { get; set; } = new List<BookingHistory>();
+
+    /// <summary>Navigation to the branch.</summary>
+    public virtual Branch Branch { get; set; } = null!;
 
     /// <summary>Navigation to the customer.</summary>
     public virtual Customer Customer { get; set; } = null!;
 
     /// <summary>Navigation to the pet.</summary>
     public virtual Pet Pet { get; set; } = null!;
+
+    /// <summary>Navigation to the assigned doctor/employee.</summary>
+    public virtual Employee? Doctor { get; set; } = null;
 }
