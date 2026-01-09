@@ -12,16 +12,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface BookingDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  booking?: any
 }
 
-export function BookingDialog({ open, onOpenChange }: BookingDialogProps) {
-  const [formData, setFormData] = useState({
-    customer: "",
-    pet: "",
-    service: "",
-    branch: "",
-    date: "",
-    time: "",
+export function BookingDialog({ open, onOpenChange, booking }: BookingDialogProps) {
+  const [formData, setFormData] = useState(() => {
+    if (booking) {
+      return {
+        customer: booking.customer || booking.customerName || "",
+        pet: booking.pet || booking.petName || "",
+        service: booking.service || booking.serviceName || "",
+        branch: booking.branch || booking.branchName || "",
+        date: booking.date || "",
+        time: booking.time || "",
+      }
+    }
+    return {
+      customer: "",
+      pet: "",
+      service: "",
+      branch: "",
+      date: "",
+      time: "",
+    }
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -34,8 +47,8 @@ export function BookingDialog({ open, onOpenChange }: BookingDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Đặt lịch hẹn mới</DialogTitle>
-          <DialogDescription>Chọn khách hàng, thú cưng và dịch vụ cần đặt lịch</DialogDescription>
+          <DialogTitle>{booking ? "Chỉnh sửa lịch hẹn" : "Đặt lịch hẹn mới"}</DialogTitle>
+          <DialogDescription>{booking ? "Cập nhật thông tin lịch hẹn" : "Chọn khách hàng, thú cưng và dịch vụ cần đặt lịch"}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">

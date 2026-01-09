@@ -59,10 +59,13 @@ public class CustomersController : ControllerBase
             // Filter by branch only when NOT searching
             if (branchId.HasValue)
             {
-                // Get customers who have invoices at this branch
-                var branchCustomerIds = await _context.Invoices
-                    .Where(i => i.BranchId == branchId.Value)
-                    .Select(i => i.CustomerId)
+                // Get customers who have bookings OR invoices at this branch
+                var branchCustomerIds = await _context.Bookings
+                    .Where(b => b.BranchId == branchId.Value)
+                    .Select(b => b.CustomerId)
+                    .Union(_context.Invoices
+                        .Where(i => i.BranchId == branchId.Value)
+                        .Select(i => i.CustomerId))
                     .Distinct()
                     .ToListAsync();
                 

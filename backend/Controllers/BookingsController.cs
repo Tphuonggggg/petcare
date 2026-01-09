@@ -80,6 +80,89 @@ public class BookingsController : ControllerBase
         
         var total = await q.CountAsync();
         var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        
+        // Create BookingType → Service mapping (English names to Vietnamese services)
+        var bookingTypeMapping = new Dictionary<string, int>
+        {
+            { "CheckHealth", 0 },      // Will be populated from DB
+            { "Vaccination", 0 },      // Will be populated from DB
+            { "Tiêm phòng", 0 }        // Direct Vietnamese name
+        };
+        
+        // Get all services and build mapping
+        var allServices = await _context.Services.ToListAsync();
+        var servicesByName = allServices.ToDictionary(s => s.Name, s => s);
+        
+        // Map English booking types to Vietnamese service names
+        var englishToVietnamese = new Dictionary<string, string>
+        {
+            { "CheckHealth", "Khám bệnh" },
+            { "Vaccination", "Tiêm phòng" }
+        };
+        
+        var dtos = items.Select(b => 
+        {
+            decimal? servicePrice = null;
+            int? serviceId = null;
+            
+            if (!string.IsNullOrEmpty(b.BookingType))
+            {
+                // First try direct match (Vietnamese names)
+                if (servicesByName.TryGetValue(b.BookingType, out var directService))
+                {
+                    servicePrice = directService.BasePrice;
+                    serviceId = directService.ServiceId;
+                }
+                // Then try mapping (English names to Vietnamese)
+                else if (englishToVietnamese.TryGetValue(b.BookingType, out var vietnameseName) 
+                         && servicesByName.TryGetValue(vietnameseName, out var mappedService))
+                {
+                    servicePrice = mappedService.BasePrice;
+                    serviceId = mappedService.ServiceId;
+                }
+            }
+            
+            return new BookingDto
+            {
+                BookingId = b.BookingId,
+                CustomerId = b.CustomerId,
+                CustomerName = b.Customer?.FullName,
+                PetId = b.PetId,
+                PetName = b.Pet?.Name,
+                BookingType = b.BookingType,
+                RequestedDateTime = b.RequestedDateTime,
+                Status = b.Status,
+                Notes = b.Notes,
+                BranchId = b.BranchId,
+                BranchName = b.Branch?.Name,
+                DoctorId = b.DoctorId,
+                DoctorName = b.Doctor?.FullName ?? (b.DoctorId.HasValue ? $"Bác sĩ {b.DoctorId}" : "Chưa gán bác sĩ"),
+                EmployeeName = b.Doctor?.FullName ?? (b.DoctorId.HasValue ? $"Bác sĩ {b.DoctorId}" : "Chưa gán bác sĩ"),
+                ServiceBasePrice = servicePrice,
+                ServiceId = serviceId
+            };
+        }).ToList();
+        return new PaginatedResult<BookingDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
+    }
+
+    /// <summary>
+    /// Returns paginated booking records for a specific customer.
+    /// </summary>
+    [HttpGet("customer/{customerId}")]
+    public async Task<ActionResult<PaginatedResult<BookingDto>>> GetByCustomer(int customerId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+        var q = _context.Bookings
+            .Include(b => b.Customer)
+            .Include(b => b.Pet)
+            .Include(b => b.Branch)
+            .Include(b => b.Doctor)
+            .Where(b => b.CustomerId == customerId)
+            .AsQueryable();
+        
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
         var dtos = items.Select(b => new BookingDto
         {
             BookingId = b.BookingId,
@@ -95,7 +178,7 @@ public class BookingsController : ControllerBase
             BranchName = b.Branch?.Name,
             DoctorId = b.DoctorId,
             DoctorName = b.Doctor?.FullName,
-            EmployeeName = null // Can be populated from CheckHealth or Invoice if needed
+            EmployeeName = null
         }).ToList();
         return new PaginatedResult<BookingDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
     }

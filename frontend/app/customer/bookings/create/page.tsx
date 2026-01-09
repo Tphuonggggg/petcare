@@ -18,7 +18,7 @@ export default function BookingCreatePage() {
     serviceId: "",
     petId: "",
     branchId: "",
-    doctorId: "",
+    doctorId: "auto",
     requestedDateTime: "",
     notes: ""
   })
@@ -61,7 +61,7 @@ export default function BookingCreatePage() {
         CustomerId: user.customerId || user.id || user.CustomerId,
         PetId: Number(form.petId),
         BranchId: Number(form.branchId),
-        DoctorId: form.doctorId ? Number(form.doctorId) : null,
+        DoctorId: form.doctorId && form.doctorId !== "auto" ? Number(form.doctorId) : null,
         BookingType: service?.name || "Dịch vụ",
         RequestedDateTime: form.requestedDateTime,
         Status: "Pending",
@@ -138,7 +138,7 @@ export default function BookingCreatePage() {
                     <SelectValue placeholder="Chọn bác sĩ (nếu có)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Không chọn (tự động gán)</SelectItem>
+                    <SelectItem value="auto">Không chọn (tự động gán)</SelectItem>
                     {doctors.filter((d: any) => d.branchId == Number(form.branchId) || !form.branchId).map((d: any) => (
                       <SelectItem key={d.employeeId ?? d.id} value={String(d.employeeId ?? d.id)}>{d.fullName}</SelectItem>
                     ))}

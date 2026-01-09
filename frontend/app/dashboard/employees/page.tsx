@@ -5,65 +5,107 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Mail, Phone, Building, User } from "lucide-react"
+import { Search, Plus, Mail, Phone, Building, User, Trash2, Eye } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api"
-
-const mockEmployees = [
-  { employeeId: 1, fullName: 'Nhân viên Tiếp tân 1', email: 'receptionist@petcare.vn', phone: '0900000001', role: 'Tiếp tân', branch: 'Chi nhánh Quận 1', code: 'EMP001' },
-  { employeeId: 2, fullName: 'Bác sĩ Thú y', email: 'vet@petcare.vn', phone: '0900000002', role: 'Bác sĩ', branch: 'Chi nhánh Quận 1', code: 'EMP002' },
-  { employeeId: 3, fullName: 'Quản lý', email: 'manager@petcare.vn', phone: '0900000003', role: 'Quản lý', branch: 'Chi nhánh Quận 3', code: 'MGR001' },
-]
+import DashboardBranchGate from '@/components/dashboard-branch-gate'
 
 export default function DashboardEmployeesPage() {
   const [searchTerm, setSearchTerm] = useState("")
-  const [employees, setEmployees] = useState<any[]>(mockEmployees)
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
+  const [employees, setEmployees] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [form, setForm] = useState({ fullName: '', email: '', phone: '', role: '', code: '' })
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<any | null>(null)
   const [saving, setSaving] = useState(false)
+  const [branchId, setBranchId] = useState<number | null>(null)
+  const [branches, setBranches] = useState<any[]>([])
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
+  // Load branches
   useEffect(() => {
     let mounted = true
     async function load() {
-      setLoading(true)
       try {
-        const data = await apiGet('/employees')
-        if (mounted && Array.isArray(data)) setEmployees(data)
+        console.log('[EMPLOYEES] Loading branches...')
+        const data = await apiGet('/branches?pageSize=100')
+        console.log('[EMPLOYEES] Branches loaded:', data)
+        if (mounted) {
+          const items = Array.isArray(data) ? data : (data?.items || [])
+          console.log('[EMPLOYEES] Setting branches, count:', items.length)
+          setBranches(items)
+        }
       } catch (e) {
-        // keep mock data
-      } finally {
-        if (mounted) setLoading(false)
+        console.error('[EMPLOYEES] Failed to load branches', e)
       }
     }
     load()
     return () => { mounted = false }
   }, [])
 
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+      setCurrentPage(1)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  // Load employees
+  useEffect(() => {
+    if (!branchId) return
+    
+    let mounted = true
+    async function load() {
+      setLoading(true)
+      try {
+        const url = `/employees?branchId=${branchId}&page=${currentPage}&pageSize=${pageSize}${debouncedSearchTerm ? `&search=${encodeURIComponent(debouncedSearchTerm)}` : ''}`
+        const data = await apiGet(url)
+        if (mounted) {
+          const items = Array.isArray(data) ? data : (data?.items || [])
+          setEmployees(items)
+          setTotalCount(Array.isArray(data) ? data.length : (data?.totalCount || 0))
+        }
+      } catch (e) {
+        console.error('Failed to load employees')
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [branchId, currentPage, pageSize, debouncedSearchTerm])
+
   const filtered = employees.filter(e => {
-    if (!searchTerm) return true
-    const q = searchTerm.toLowerCase()
+    if (!debouncedSearchTerm) return true
+    const q = debouncedSearchTerm.toLowerCase()
     return (e.fullName || '').toLowerCase().includes(q) || (e.email || '').toLowerCase().includes(q) || String(e.phone || '').includes(q) || (e.role || '').toLowerCase().includes(q)
   })
 
+  const totalPages = branchId ? Math.ceil(totalCount / pageSize) : 0
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
+    if (!branchId) {
+      alert('Vui lòng chọn chi nhánh')
+      return
+    }
     try {
-      // optimistic: call apiPost if available
-      const payload = { ...form }
-      try {
-        const created = await apiPost('/employees', payload)
-        setEmployees(prev => [created, ...prev])
-      } catch {
-        setEmployees(prev => [{ employeeId: Date.now(), ...payload }, ...prev])
-      }
+      const payload = { ...form, branchId }
+      const created = await apiPost('/employees', payload)
+      setEmployees(prev => [created, ...prev])
       setIsDialogOpen(false)
       setForm({ fullName: '', email: '', phone: '', role: '', code: '' })
     } catch (err) {
       console.error(err)
+      alert('Tạo nhân viên thất bại')
     }
   }
 
@@ -104,6 +146,7 @@ export default function DashboardEmployeesPage() {
       setSelected(null)
     } catch (err) {
       console.error(err)
+      alert('Lưu thông tin thất bại')
     } finally {
       setSaving(false)
     }
@@ -121,75 +164,154 @@ export default function DashboardEmployeesPage() {
       }
     } catch (err) {
       console.error(err)
+      alert('Xóa nhân viên thất bại')
     }
   }
 
   return (
+    <DashboardBranchGate>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Nhân viên</h1>
+          <h1 className="text-3xl font-bold">Quản lý Nhân viên</h1>
           <p className="text-muted-foreground mt-1">Quản lý nhân sự và phân công</p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)}>
+        <Button onClick={() => setIsDialogOpen(true)} disabled={!branchId}>
           <Plus className="h-4 w-4 mr-2" />
           Thêm nhân viên
         </Button>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Tìm kiếm theo tên, email, số điện thoại, vị trí..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
+      <div className="flex flex-col gap-4 md:flex-row md:items-end">
+        <div className="flex-shrink-0 w-full md:w-64">
+          <Label htmlFor="branch-select" className="block mb-2 text-sm font-medium">Chọn Chi Nhánh</Label>
+          <Select value={branchId?.toString() || ''} onValueChange={(v) => setBranchId(Number(v))}>
+            <SelectTrigger id="branch-select">
+              <SelectValue placeholder="Chọn chi nhánh" />
+            </SelectTrigger>
+            <SelectContent>
+              {branches.map((b) => (
+                <SelectItem key={b.branchId || b.id} value={(b.branchId || b.id).toString()}>
+                  {b.name || b.branchName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="relative flex-1 min-w-0">
+          <Label htmlFor="search-input" className="block mb-2 text-sm font-medium">Tìm Kiếm</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              id="search-input"
+              placeholder="Tìm theo tên, email, số điện thoại, vị trí..." 
+              value={searchTerm} 
+              onChange={(e) => setSearchTerm(e.target.value)} 
+              className="pl-9" 
+              disabled={!branchId}
+            />
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {(loading ? [] : filtered).map((emp) => {
-          const id = emp.employeeId ?? emp.id
-          const name = emp.fullName ?? emp.name ?? 'Nhân viên'
-          const email = emp.email ?? ''
-          const phone = emp.phone ?? ''
-          const role = emp.role ?? emp.position ?? '—'
-          const branch = emp.branch ?? emp.branchName ?? ''
-          return (
-            <Card key={id} onClick={() => openDetail(id)} className="p-6 hover:shadow-lg transition-shadow cursor-pointer">
-              <div className="space-y-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold text-lg flex items-center gap-2"><User className="h-5 w-5 text-muted-foreground" />{name}</h3>
-                    <Badge className="mt-1">{role}</Badge>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Mã</p>
-                    <p className="text-lg font-bold text-primary">{emp.code ?? '—'}</p>
-                  </div>
-                </div>
+      {branchId ? (
+        <>
+          <div className="text-sm text-muted-foreground">
+            Tổng cộng <span className="font-semibold">{totalCount.toLocaleString()}</span> nhân viên
+          </div>
 
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground"><Mail className="h-4 w-4" /> <span>{email}</span></div>
-                  <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4" /> <span>{phone}</span></div>
-                  <div className="flex items-center gap-2 text-muted-foreground"><Building className="h-4 w-4" /> <span>{branch}</span></div>
-                </div>
-
-                      <div className="pt-4 border-t flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Vai trò: {role}</span>
-                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(id) }}>Xem chi tiết</Button>
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {(loading ? [] : filtered).map((emp) => {
+              const id = emp.employeeId ?? emp.id
+              const name = emp.fullName ?? emp.name ?? 'Nhân viên'
+              const email = emp.email ?? ''
+              const phone = emp.phone ?? ''
+              const role = emp.role ?? emp.position ?? '—'
+              const branch = emp.branch ?? emp.branchName ?? ''
+              return (
+                <Card key={id} className="p-6 hover:shadow-lg transition-shadow">
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-semibold text-lg flex items-center gap-2"><User className="h-5 w-5 text-muted-foreground" />{name}</h3>
+                        <Badge className="mt-1">{role}</Badge>
                       </div>
-              </div>
-            </Card>
-          )
-        })}
-      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Mã</p>
+                        <p className="text-sm font-bold text-primary">{emp.code ?? '—'}</p>
+                      </div>
+                    </div>
 
-            {/* Inline right-side panel */}
-            {panelOpen ? (
-              <div className="fixed inset-y-0 right-0 w-full md:w-1/3 bg-background border-l p-6 overflow-auto">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold">{(selected && (selected.fullName || selected.name)) ? `Nhân viên: ${selected.fullName || selected.name}` : 'Nhân viên'}</h3>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" onClick={() => { setPanelOpen(false); setSelected(null) }}>Đóng</Button>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2 text-muted-foreground"><Mail className="h-4 w-4" /> <span className="truncate">{email}</span></div>
+                      <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4" /> <span>{phone}</span></div>
+                      <div className="flex items-center gap-2 text-muted-foreground"><Building className="h-4 w-4" /> <span className="truncate">{branch}</span></div>
+                    </div>
+
+                    <div className="pt-4 border-t flex items-center justify-between gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openDetail(id)} className="flex-1">
+                        <Eye className="h-4 w-4 mr-1" /> Xem
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDelete(id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
+                </Card>
+              )
+            })}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-8">
+              <Button
+                variant="outline"
+                disabled={currentPage === 1 || loading}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              >
+                ← Trước
+              </Button>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Trang</span>
+                <input
+                  type="number"
+                  min="1"
+                  max={totalPages}
+                  value={currentPage}
+                  onChange={(e) => {
+                    const page = Math.max(1, Math.min(totalPages, parseInt(e.target.value) || 1))
+                    setCurrentPage(page)
+                  }}
+                  className="w-16 px-2 py-1 border rounded text-center"
+                  disabled={loading}
+                />
+                <span className="text-sm text-muted-foreground">trên {totalPages.toLocaleString()}</span>
+              </div>
+              
+              <Button
+                variant="outline"
+                disabled={currentPage === totalPages || loading}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              >
+                Sau →
+              </Button>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="py-12 text-center">
+          <p className="text-muted-foreground">Vui lòng chọn chi nhánh để xem danh sách nhân viên</p>
+        </div>
+      )}
+
+            {/* Detail panel */}
+            {panelOpen ? (
+              <div className="fixed inset-y-0 right-0 w-full md:w-1/3 bg-background border-l p-6 overflow-auto z-50">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold">Chi tiết nhân viên</h3>
+                  <Button variant="ghost" onClick={() => { setPanelOpen(false); setSelected(null) }}>Đóng</Button>
                 </div>
                 {selected ? (
                   <form onSubmit={handleSave as any} className="space-y-4">
@@ -260,5 +382,6 @@ export default function DashboardEmployeesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardBranchGate>
   )
 }

@@ -5,8 +5,11 @@ import { getSelectedBranchId, getSelectedBranchName } from '@/lib/branch'
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, Plus } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Calendar, Clock } from "lucide-react"
 import { BookingDialog } from "@/components/booking-dialog"
+import DashboardBranchGate from '@/components/dashboard-branch-gate'
 
 const mockBookings = [
   {
@@ -45,22 +48,50 @@ const mockBookings = [
 ]
 
 export default function BookingsPage() {
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
   const [bookings, setBookings] = useState<any[]>(mockBookings)
   const [loading, setLoading] = useState(false)
+  const [selectedBooking, setSelectedBooking] = useState<any>(null)
+  const [branches, setBranches] = useState<any[]>([])
+  const [branchId, setBranchId] = useState<number | null>(null)
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  // Load branches
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const { apiGet } = await import('@/lib/api')
+        const data = await apiGet('/branches?pageSize=100')
+        if (mounted) {
+          const items = Array.isArray(data) ? data : (data?.items || [])
+          setBranches(items)
+          if (items.length > 0) {
+            setBranchId(items[0].branchId || items[0].id)
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load branches:', e)
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
 
   useEffect(() => {
     let mounted = true
     async function load() {
+      if (!branchId) return
       setLoading(true)
       try {
         const { apiGet } = await import('@/lib/api')
-        const branchId = getSelectedBranchId()
-        const data = branchId ? await apiGet('/bookings?branchId=' + branchId) : await apiGet('/bookings')
+        const data = await apiGet(`/bookings?branchId=${branchId}&page=${currentPage}&pageSize=${pageSize}`)
         
         if (mounted) {
           // Handle both array and paginated response
           let items = Array.isArray(data) ? data : (data?.items || [])
+          const count = Array.isArray(data) ? data.length : (data?.totalCount || 0)
           
           // Transform API response to match UI expectations
           const transformed = items.map((b: any) => ({
@@ -78,6 +109,7 @@ export default function BookingsPage() {
           }))
           
           setBookings(transformed)
+          setTotalCount(count)
         }
       } catch (e) {
         console.error('Error loading bookings:', e)
@@ -87,10 +119,7 @@ export default function BookingsPage() {
       }
     }
     load()
-    const onBranch = () => { load() }
-    window.addEventListener('branch-changed', onBranch as EventListener)
-    return () => { mounted = false; window.removeEventListener('branch-changed', onBranch as EventListener) }
-  }, [])
+  }, [branchId, currentPage, pageSize])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -129,17 +158,34 @@ export default function BookingsPage() {
     }
   }
 
+  const handleDetailClick = (booking: any) => {
+    setSelectedBooking(booking)
+    setIsDetailDialogOpen(true)
+  }
+
   return (
+    <DashboardBranchGate>
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-col md:flex-row gap-4">
         <div>
           <h1 className="text-3xl font-bold">Lịch đặt hẹn</h1>
           <p className="text-muted-foreground mt-1">Quản lý lịch hẹn dịch vụ</p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Đặt lịch mới
-        </Button>
+        <div className="w-full md:w-64">
+          <Label htmlFor="branch-select" className="block mb-2 text-sm font-medium">Chọn Chi Nhánh</Label>
+          <Select value={branchId?.toString() || ''} onValueChange={(v) => setBranchId(Number(v))}>
+            <SelectTrigger id="branch-select">
+              <SelectValue placeholder="Chọn chi nhánh" />
+            </SelectTrigger>
+            <SelectContent>
+              {branches.map((b) => (
+                <SelectItem key={b.branchId || b.id} value={(b.branchId || b.id).toString()}>
+                  {b.name || b.branchName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -183,11 +229,8 @@ export default function BookingsPage() {
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => handleDetailClick(booking)}>
                     Chi tiết
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    Chỉnh sửa
                   </Button>
                   {(getStatusLabel(booking.status) === "Chờ xác nhận") && <Button size="sm">Xác nhận</Button>}
                 </div>
@@ -197,7 +240,97 @@ export default function BookingsPage() {
         )})}
       </div>
 
-      <BookingDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
+      {/* Pagination */}
+      {totalCount > 0 && (
+        <div className="flex items-center justify-center gap-4 mt-6">
+          <Button
+            variant="outline"
+            disabled={currentPage === 1 || loading}
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+          >
+            ← Trước
+          </Button>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Trang</span>
+            <input
+              type="number"
+              min="1"
+              max={Math.ceil(totalCount / pageSize)}
+              value={currentPage}
+              onChange={(e) => {
+                const page = Math.max(1, Math.min(Math.ceil(totalCount / pageSize), parseInt(e.target.value) || 1))
+                setCurrentPage(page)
+              }}
+              className="w-16 px-2 py-1 border rounded text-center"
+              disabled={loading}
+            />
+            <span className="text-sm text-muted-foreground">trên {Math.ceil(totalCount / pageSize)}</span>
+          </div>
+          
+          <Button
+            variant="outline"
+            disabled={currentPage === Math.ceil(totalCount / pageSize) || loading}
+            onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
+          >
+            Sau →
+          </Button>
+        </div>
+      )}
+
+      {/* Detail Dialog */}
+      {isDetailDialogOpen && selectedBooking && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold">Chi tiết đặt lịch</h2>
+                <button onClick={() => setIsDetailDialogOpen(false)} className="text-2xl leading-none">&times;</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                  <p className="text-sm text-muted-foreground">Dịch vụ</p>
+                  <p className="font-semibold">{selectedBooking.service || selectedBooking.serviceName || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Trạng thái</p>
+                  <Badge className={getStatusColor(selectedBooking.status)}>{getStatusLabel(selectedBooking.status)}</Badge>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Khách hàng</p>
+                  <p className="font-semibold">{selectedBooking.customer || selectedBooking.customerName || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Thú cưng</p>
+                  <p className="font-semibold">{selectedBooking.pet || selectedBooking.petName || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Ngày đặt</p>
+                  <p className="font-semibold">{selectedBooking.date}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Thời gian</p>
+                  <p className="font-semibold">{selectedBooking.time}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Chi nhánh</p>
+                  <p className="font-semibold">{selectedBooking.branch || selectedBooking.branchName || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Nhân viên</p>
+                  <p className="font-semibold">{selectedBooking.employee || selectedBooking.employeeName || 'N/A'}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setIsDetailDialogOpen(false)}>Đóng</Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
+    </DashboardBranchGate>
   )
 }

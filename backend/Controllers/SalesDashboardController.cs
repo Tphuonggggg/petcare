@@ -93,7 +93,7 @@ public class SalesDashboardController : ControllerBase
     [HttpGet("today-orders")]
     public async Task<ActionResult<List<OrderDetailDto>>> GetTodayOrders([FromQuery] int branchId, [FromQuery] int take = 20, [FromQuery] DateTime? date = null, [FromQuery] int days = 30)
     {
-        var targetDate = date ?? DateTime.Today;
+        var targetDate = date ?? DateTime.Now.Date;  // Use current system time
         var startOfDay = targetDate.Date.AddDays(-days); // Default to last 30 days
         var endOfDay = targetDate.Date.AddDays(1);
 
@@ -101,7 +101,7 @@ public class SalesDashboardController : ControllerBase
             .Where(i => i.BranchId == branchId && i.InvoiceDate >= startOfDay && i.InvoiceDate < endOfDay)
             .Include(i => i.Customer)
             .Include(i => i.InvoiceItems)
-            .OrderByDescending(i => i.InvoiceDate)
+            .OrderByDescending(i => i.InvoiceDate)  // Sort by newest first
             .Take(take)
             .Select(i => new OrderDetailDto
             {

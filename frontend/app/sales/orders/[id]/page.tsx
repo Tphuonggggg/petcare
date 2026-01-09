@@ -80,7 +80,9 @@ export default function SalesOrderDetailPage() {
     if (!order) return
     try {
       setConfirming(true)
-      await apiPut(`/invoices/${order.invoiceId}/status`, { status: "processing" })
+      // If Pending, move to Processing. If Processing, move to Paid
+      const nextStatus = order.status === "Pending" ? "Processing" : "Paid"
+      await apiPut(`/invoices/${order.invoiceId}/status`, { status: nextStatus })
       
       // Reload order to get updated status
       await loadOrder()
@@ -105,7 +107,7 @@ export default function SalesOrderDetailPage() {
     if (!order) return
     try {
       setCompleting(true)
-      await apiPut(`/invoices/${order.invoiceId}/status`, { status: "paid" })
+      await apiPut(`/invoices/${order.invoiceId}/status`, { status: "Paid" })
       
       // Reload order to get updated status
       await loadOrder()

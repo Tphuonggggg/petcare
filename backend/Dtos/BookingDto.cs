@@ -58,4 +58,11 @@ public class BookingDto
     public string? DoctorName { get; set; }
 
     /// <summary>Employee name (for display).</summary>
-    public string? EmployeeName { get; set; }}
+    public string? EmployeeName { get; set; }
+
+    /// <summary>Service base price for calculating revenue.</summary>
+    public decimal? ServiceBasePrice { get; set; }
+
+    /// <summary>Service ID if available.</summary>
+    public int? ServiceId { get; set; }
+}

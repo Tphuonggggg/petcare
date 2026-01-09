@@ -283,7 +283,7 @@ public partial class ApplicationDbContext : DbContext
 
             entity.ToTable("Employee");
 
-            entity.Property(e => e.EmployeeId).HasColumnName("EmployeeID");
+            entity.Property(e => e.EmployeeId).HasColumnName("EmployeeID").ValueGeneratedOnAdd();
             entity.Property(e => e.BaseSalary).HasColumnType("decimal(14, 2)");
             entity.Property(e => e.BranchId).HasColumnName("BranchID");
             entity.Property(e => e.FullName).HasMaxLength(150);

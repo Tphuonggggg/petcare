@@ -161,6 +161,22 @@ public class InvoicesController : ControllerBase
             {
                 foreach (var item in dto.Items)
                 {
+                    // Check if this item already exists (prevent duplicates)
+                    var existingItem = await _context.InvoiceItems
+                        .Where(ii => ii.InvoiceId == invoiceId
+                            && ii.ProductId == item.ProductId
+                            && ii.ServiceId == item.ServiceId
+                            && ii.ItemType == (item.ItemType ?? "PRODUCT")
+                            && ii.Quantity == (item.Quantity ?? 1)
+                            && ii.UnitPrice == (item.UnitPrice ?? 0))
+                        .FirstOrDefaultAsync();
+                    
+                    if (existingItem != null)
+                    {
+                        // Item already exists, skip or update if needed
+                        continue;
+                    }
+
                     await _context.Database.ExecuteSqlRawAsync(@"
                         INSERT INTO InvoiceItem (InvoiceID, ProductID, ServiceID, ItemType, Quantity, UnitPrice)
                         VALUES ({0}, {1}, {2}, {3}, {4}, {5})",
@@ -258,15 +274,27 @@ public class InvoicesController : ControllerBase
     [HttpPut("{id}/status")]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest request)
     {
-        var invoice = await _context.Invoices.FindAsync(id);
-        if (invoice == null)
-            return NotFound();
+        try
+        {
+            var invoice = await _context.Invoices.FindAsync(id);
+            if (invoice == null)
+                return NotFound();
 
-        invoice.Status = request.Status;
-        _context.Invoices.Update(invoice);
-        await _context.SaveChangesAsync();
+            // Validate status value
+            var validStatuses = new[] { "Pending", "Processing", "Paid", "Cancelled" };
+            if (!validStatuses.Contains(request.Status))
+                return BadRequest(new { message = $"Invalid status. Must be one of: {string.Join(", ", validStatuses)}" });
 
-        return Ok(new { message = "Status updated successfully", status = invoice.Status });
+            invoice.Status = request.Status;
+            _context.Invoices.Update(invoice);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Status updated successfully", status = invoice.Status });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error updating status", error = ex.InnerException?.Message ?? ex.Message });
+        }
     }
 }
 

@@ -36,4 +36,10 @@ public class EmployeeDto
     /// <summary>Base salary (optional).</summary>
     [Range(0, double.MaxValue, ErrorMessage = "BaseSalary must be non-negative.")]
     public decimal? BaseSalary { get; set; }
+
+    /// <summary>Branch information where the employee works.</summary>
+    public BranchDto? Branch { get; set; }
+
+    /// <summary>Position information held by the employee.</summary>
+    public PositionDto? Position { get; set; }
 }

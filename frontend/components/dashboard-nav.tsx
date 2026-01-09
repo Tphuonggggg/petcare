@@ -26,7 +26,6 @@ const navigation = [
   { name: "Đặt lịch", href: "/dashboard/bookings", icon: Calendar },
   { name: "Dịch vụ", href: "/dashboard/services", icon: Stethoscope },
   { name: "Sản phẩm", href: "/dashboard/products", icon: Package },
-  { name: "Đơn hàng", href: "/dashboard/orders", icon: ShoppingCart },
   { name: "Hóa đơn", href: "/dashboard/invoices", icon: FileText },
   { name: "Chi nhánh", href: "/dashboard/branches", icon: Building },
   { name: "Cài đặt", href: "/dashboard/settings", icon: Settings },

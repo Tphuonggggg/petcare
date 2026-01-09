@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Search, Plus } from "lucide-react"
+import DashboardBranchGate from '@/components/dashboard-branch-gate'
 
 const mockPets = [
   {
@@ -47,15 +48,29 @@ export default function PetsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [pets, setPets] = useState<any[]>(mockPets)
   const [loading, setLoading] = useState(false)
+  const [branchId, setBranchId] = useState<number | null>(null)
 
   useEffect(() => {
+    try {
+      const id = localStorage.getItem('selected_branch_id')
+      if (id) setBranchId(Number(id))
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (!branchId) return
+    
     let mounted = true
     async function load() {
       setLoading(true)
       try {
         const { apiGet } = await import('@/lib/api')
-        const data = await apiGet('/pets')
-        if (mounted && Array.isArray(data)) setPets(data)
+        // Fetch pets that have bookings/records in the selected branch
+        const data = await apiGet(`/pets?branchId=${branchId}`)
+        if (mounted) {
+          const items = Array.isArray(data) ? data : (data?.items || [])
+          setPets(items)
+        }
       } catch (e) {
         // keep mockPets on error
       } finally {
@@ -64,7 +79,7 @@ export default function PetsPage() {
     }
     load()
     return () => { mounted = false }
-  }, [])
+  }, [branchId])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -80,6 +95,7 @@ export default function PetsPage() {
   }
 
   return (
+    <DashboardBranchGate>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -149,6 +165,5 @@ export default function PetsPage() {
             )
           })}
       </div>
-    </div>
-  )
+    </div>    </DashboardBranchGate>  )
 }

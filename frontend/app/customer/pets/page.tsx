@@ -121,6 +121,15 @@ export default function CustomerPetsPage() {
     }
   }
 
+  const getGenderLabel = (gender?: string) => {
+    const genderMap: { [key: string]: string } = {
+      M: "Đực",
+      F: "Cái",
+      U: "Chưa xác định",
+    }
+    return gender ? (genderMap[gender] || gender) : "---"
+  }
+
   return (
     <div className="min-h-screen bg-muted/30">
       <div className="space-y-8">
@@ -194,7 +203,7 @@ export default function CustomerPetsPage() {
                     </div>
                     <div className="bg-muted p-3 rounded-lg text-center">
                       <p className="text-xs text-muted-foreground mb-1">Giới tính</p>
-                      <p className="font-semibold text-sm">{pet.gender || "---"}</p>
+                      <p className="font-semibold text-sm">{getGenderLabel(pet.gender)}</p>
                     </div>
                   </div>
 

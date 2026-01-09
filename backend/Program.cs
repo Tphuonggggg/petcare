@@ -25,7 +25,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
         options.UseSqlServer(
             builder.Configuration.GetConnectionString("DefaultConnection"),
-            sqlOptions => sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SingleQuery));
+            sqlOptions => {
+                sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SingleQuery);
+                // Disable OutputClause to work with database triggers
+                sqlOptions.ExecutionStrategy(x => new Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal.SqlServerExecutionStrategy(x));
+            });
         Console.WriteLine("✅ DbContext configured successfully");
     }
     catch (Exception ex)

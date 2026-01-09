@@ -33,12 +33,19 @@ public class EmployeesController : ControllerBase
     }
 
     /// <summary>
-    /// Returns employees, optionally filtered by branch.
+    /// Returns employees, optionally filtered by branch and search term, with pagination.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<EmployeeDto>>> Get([FromQuery] int? branchId = null)
+    public async Task<ActionResult<PaginatedResult<EmployeeDto>>> Get(
+        [FromQuery] int? branchId = null,
+        [FromQuery] string? search = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var q = _context.Employees.AsQueryable();
+        var q = _context.Employees
+            .Include(e => e.Branch)
+            .Include(e => e.Position)
+            .AsQueryable();
         
         // Filter by branch if provided
         if (branchId.HasValue)
@@ -46,8 +53,32 @@ public class EmployeesController : ControllerBase
             q = q.Where(e => e.BranchId == branchId.Value);
         }
         
-        var list = await q.ToListAsync();
-        return _mapper.Map<List<EmployeeDto>>(list);
+        // Filter by search term if provided
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchLower = search.ToLower();
+            q = q.Where(e => 
+                e.FullName.ToLower().Contains(searchLower) ||
+                e.Gender.ToLower().Contains(searchLower) ||
+                e.Position.Name.ToLower().Contains(searchLower)
+            );
+        }
+        
+        var totalCount = await q.CountAsync();
+        var list = await q
+            .OrderBy(e => e.EmployeeId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+        
+        var items = _mapper.Map<List<EmployeeDto>>(list);
+        return Ok(new PaginatedResult<EmployeeDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        });
     }
 
     /// <summary>
@@ -68,10 +99,46 @@ public class EmployeesController : ControllerBase
     public async Task<ActionResult<EmployeeDto>> Post(EmployeeDto dto)
     {
         var entity = _mapper.Map<Employee>(dto);
-        _context.Employees.Add(entity);
-        await _context.SaveChangesAsync();
-        var result = _mapper.Map<EmployeeDto>(entity);
-        return CreatedAtAction(nameof(Get), new { id = entity.EmployeeId }, result);
+        
+        try
+        {
+            _context.Employees.Add(entity);
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("trigger") == true)
+        {
+            // SQL Server with triggers cannot use OUTPUT clause
+            // Use raw SQL insert and get the identity value back
+            _context.ChangeTracker.Clear();
+            
+            using (var command = _context.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = @"
+                    INSERT INTO [Employee] (BranchID, PositionID, FullName, BirthDate, Gender, HireDate, BaseSalary)
+                    VALUES (@BranchId, @PositionId, @FullName, @BirthDate, @Gender, @HireDate, @BaseSalary);
+                    SELECT SCOPE_IDENTITY() as NewId";
+                
+                command.Parameters.Add(new SqlParameter("@BranchId", entity.BranchId));
+                command.Parameters.Add(new SqlParameter("@PositionId", entity.PositionId));
+                command.Parameters.Add(new SqlParameter("@FullName", entity.FullName));
+                command.Parameters.Add(new SqlParameter("@BirthDate", entity.BirthDate));
+                command.Parameters.Add(new SqlParameter("@Gender", entity.Gender));
+                command.Parameters.Add(new SqlParameter("@HireDate", entity.HireDate));
+                command.Parameters.Add(new SqlParameter("@BaseSalary", entity.BaseSalary));
+                
+                if (command.Connection?.State == System.Data.ConnectionState.Closed)
+                    command.Connection?.Open();
+                
+                var result = await command.ExecuteScalarAsync();
+                if (result != null && decimal.TryParse(result.ToString(), out var id))
+                {
+                    entity.EmployeeId = (int)id;
+                }
+            }
+        }
+        
+        var result_dto = _mapper.Map<EmployeeDto>(entity);
+        return CreatedAtAction(nameof(Get), new { id = entity.EmployeeId }, result_dto);
     }
 
     /// <summary>
@@ -80,15 +147,41 @@ public class EmployeesController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Put(int id, EmployeeDto dto)
     {
-        if (id != dto.EmployeeId) return BadRequest();
-        var entity = _mapper.Map<Employee>(dto);
-        _context.Entry(entity).State = EntityState.Modified;
-        try { await _context.SaveChangesAsync(); }
+        var entity = await _context.Employees.FindAsync(id);
+        if (entity == null) return NotFound();
+        
+        // Update only provided fields
+        if (!string.IsNullOrWhiteSpace(dto.FullName))
+            entity.FullName = dto.FullName;
+        
+        if (dto.BirthDate.HasValue)
+            entity.BirthDate = dto.BirthDate.Value;
+        
+        if (!string.IsNullOrWhiteSpace(dto.Gender))
+            entity.Gender = dto.Gender;
+        
+        if (dto.HireDate.HasValue)
+            entity.HireDate = dto.HireDate.Value;
+        
+        if (dto.BaseSalary.HasValue)
+            entity.BaseSalary = dto.BaseSalary.Value;
+        
+        if (dto.BranchId.HasValue)
+            entity.BranchId = dto.BranchId.Value;
+        
+        if (dto.PositionId.HasValue)
+            entity.PositionId = dto.PositionId.Value;
+        
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
         catch (DbUpdateConcurrencyException)
         {
             if (!_context.Employees.Any(x => x.EmployeeId == id)) return NotFound();
             throw;
         }
+        
         return NoContent();
     }
 

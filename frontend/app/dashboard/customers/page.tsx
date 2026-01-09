@@ -9,55 +9,45 @@ import { Search, Plus, Mail, Phone, MapPin } from "lucide-react"
 import { CustomerDialog } from "@/components/customer-dialog"
 import { apiGet } from "@/lib/api"
 
-const mockCustomers = [
-  {
-    id: 1,
-    name: "Nguyễn Văn A",
-    email: "nguyenvana@email.com",
-    phone: "0901234567",
-    address: "123 Nguyễn Trãi, Q1, TP.HCM",
-    membershipTier: "VIP",
-    points: 1500,
-    pets: 2,
-  },
-  {
-    id: 2,
-    name: "Trần Thị B",
-    email: "tranthib@email.com",
-    phone: "0907654321",
-    address: "456 Lê Lợi, Q3, TP.HCM",
-    membershipTier: "Vàng",
-    points: 850,
-    pets: 1,
-  },
-  {
-    id: 3,
-    name: "Lê Văn C",
-    email: "levanc@email.com",
-    phone: "0912345678",
-    address: "789 Hai Bà Trưng, Q10, TP.HCM",
-    membershipTier: "Bạc",
-    points: 450,
-    pets: 3,
-  },
-]
+function cn(...classes: string[]) {
+  return classes.filter(Boolean).join(" ")
+}
 
 export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [customers, setCustomers] = useState<any[]>(mockCustomers)
+  const [customers, setCustomers] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [totalCount, setTotalCount] = useState(0)
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+      setCurrentPage(1) // Reset page when search changes
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
 
   useEffect(() => {
     let mounted = true
     async function load() {
       setLoading(true)
       try {
-        const data = await apiGet('/customers')
-        if (mounted && Array.isArray(data)) setCustomers(data)
+        const url = `/customers?page=${currentPage}&pageSize=${pageSize}${debouncedSearchTerm ? `&search=${encodeURIComponent(debouncedSearchTerm)}` : ''}`
+        const data = await apiGet(url)
+        if (mounted && Array.isArray(data)) {
+          setCustomers(data)
+          setTotalCount(data.length)
+        } else if (mounted && data?.items && Array.isArray(data.items)) {
+          setCustomers(data.items)
+          setTotalCount(data.totalCount || 0)
+        }
       } catch (e) {
-        // keep mock data on error
-        // console.warn('fetch customers failed', e)
+        console.error('fetch customers failed', e)
       } finally {
         if (mounted) setLoading(false)
       }
@@ -66,7 +56,7 @@ export default function CustomersPage() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [currentPage, pageSize, debouncedSearchTerm])
 
   const getTierColor = (tier: string) => {
     switch (tier) {
@@ -81,7 +71,9 @@ export default function CustomersPage() {
     }
   }
 
-  return (
+  const totalPages = Math.ceil(totalCount / pageSize)
+
+  const content = (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -92,6 +84,12 @@ export default function CustomersPage() {
           <Plus className="h-4 w-4 mr-2" />
           Thêm khách hàng
         </Button>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          Tổng cộng <span className="font-semibold">{totalCount.toLocaleString()}</span> khách hàng
+        </div>
       </div>
 
       <div className="flex items-center gap-4">
@@ -106,7 +104,7 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {(loading ? [] : customers).map((customer) => {
           const id = customer?.customerId ?? customer?.id
           const name = customer?.fullName ?? customer?.name ?? 'Khách hàng'
@@ -156,11 +154,46 @@ export default function CustomersPage() {
         )})}
       </div>
 
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4 mt-8">
+          <Button
+            variant="outline"
+            disabled={currentPage === 1 || loading}
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+          >
+            ← Trước
+          </Button>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Trang</span>
+            <input
+              type="number"
+              min="1"
+              max={totalPages}
+              value={currentPage}
+              onChange={(e) => {
+                const page = Math.max(1, Math.min(totalPages, parseInt(e.target.value) || 1))
+                setCurrentPage(page)
+              }}
+              className="w-16 px-2 py-1 border rounded text-center"
+              disabled={loading}
+            />
+            <span className="text-sm text-muted-foreground">trên {totalPages.toLocaleString()}</span>
+          </div>
+          
+          <Button
+            variant="outline"
+            disabled={currentPage === totalPages || loading}
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+          >
+            Sau →
+          </Button>
+        </div>
+      )}
+
       <CustomerDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
     </div>
   )
-}
 
-function cn(...classes: string[]) {
-  return classes.filter(Boolean).join(" ")
+  return content
 }

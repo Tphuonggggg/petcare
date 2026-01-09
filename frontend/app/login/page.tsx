@@ -26,11 +26,20 @@ interface LoginResponse {
 }
 
 const DEMO_ACCOUNTS = [
-  { username: "nguyenthituan2", password: "123456", role: "Bác sĩ thú y", position: "Vet" },
-  { username: "phamkhanhvy10", password: "123456", role: "Nhân viên tiếp tân", position: "Receptionist" },
-  { username: "dothithinh16", password: "123456", role: "Nhân viên bán hàng", position: "Sales" },
-  { username: "levantuan1", password: "123456", role: "Quản lý chi nhánh", position: "Admin" },
-  { username: "0900000001", password: "123456", role: "Khách hàng demo (dữ liệu thật)", position: "Customer" },
+  // Veterinarian (Bác sĩ thú y) - PositionID: 1
+  { username: "daophuonghung7", password: "123456", role: "Bác sĩ thú y", position: "🏥 Bác sĩ Thú y" },
+  
+  // Receptionist (Nhân viên tiếp tân) - PositionID: 2
+  { username: "dominhquan3", password: "123456", role: "Nhân viên tiếp tân", position: "📞 Tiếp Tân" },
+  
+  // Sales (Nhân viên bán hàng) - PositionID: 3
+  { username: "vuongbaothao2", password: "123456", role: "Nhân viên bán hàng", position: "💰 Bán Hàng" },
+  
+  // Manager (Quản lý chi nhánh) - PositionID: 4
+  { username: "dangthiphuc1", password: "123456", role: "Quản lý chi nhánh", position: "👔 Quản Lý" },
+  
+  // Customer (Khách hàng)
+  { username: "0900000001", password: "123456", role: "Khách hàng", position: "🛒 Khách Hàng" },
 ]
 
 export default function LoginPage() {
@@ -52,7 +61,8 @@ export default function LoginPage() {
 
     try {
       // Call real backend login API
-      const response = await fetch("/api/auth/login", {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const response = await fetch(`${apiUrl}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

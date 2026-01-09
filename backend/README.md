@@ -1,53 +1,126 @@
 # PetCareX Backend API
 
-**Hệ thống quản lý thú cưng toàn diện** - API backend cho nền tảng chăm sóc thú cưng với 20+ chi nhánh.
+ASP.NET Core 8 API backend cho hệ thống quản lý thú cưng.
 
-## 🎯 Tính năng chính
+## 📋 Yêu cầu
 
-- ✅ **Quản lý khách hàng** - Hồ sơ, điểm loyalty, membership tiers
-- ✅ **Đặt lịch hẹn** - Booking dịch vụ, quản lý trạng thái
-- ✅ **Quản lý thú cưng** - Hồ sơ thú cưng, lịch sử tiêm chủng
-- ✅ **Bán hàng** - Sản phẩm, hóa đơn, quản lý kho
-- ✅ **Quản lý nhân viên** - Theo dõi nhân viên, phân quyền theo vai trò
-- ✅ **Báo cáo & thống kê** - Dashboard cho từng vai trò
-- ✅ **API Documentation** - Swagger/OpenAPI
-
-## 🛠️ Tech Stack
-
-| Công nghệ | Phiên bản | Mục đích |
-|-----------|----------|---------|
-| **.NET** | 8.0+ | Runtime/Framework |
-| **C#** | 12.0+ | Ngôn ngữ lập trình |
-| **Entity Framework Core** | 8.x | ORM |
-| **SQL Server** | 2019+ | Database |
-| **AutoMapper** | 13.x | DTO Mapping |
-| **Swagger/OpenAPI** | 6.x | API Documentation |
-
-## 📋 Prerequisites
-
-Trước khi bắt đầu, đảm bảo bạn có:
-
-- ✅ **.NET SDK 8.0+**
-  ```bash
-  dotnet --version
-  ```
-
-- ✅ **SQL Server 2019+** (local hoặc Azure)
-  - Hoặc Azure SQL Database
-
-- ✅ **Visual Studio 2022** hoặc **VS Code** + C# extension
+- **.NET SDK 8.0+** - [Download](https://dotnet.microsoft.com/download)
+- **SQL Server** - Local hoặc Azure SQL Database
 
 ## 🚀 Cài đặt & Chạy
 
-### 1. Clone dự án
+### 1. Vào thư mục backend
 ```bash
-cd d:\CODE\PetCareX\backend
+cd PetCareX/backend
 ```
 
-### 2. Restore NuGet packages
+### 2. Kiểm tra .NET SDK
+```bash
+dotnet --version
+```
+
+### 3. Restore dependencies
 ```bash
 dotnet restore
 ```
+
+### 4. Cấu hình Database
+
+Mở file `appsettings.json` và sửa connection string:
+
+**SQL Server Local:**
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Server=localhost;Database=PetCareX;Trusted_Connection=true;TrustServerCertificate=true;"
+}
+```
+
+**Azure SQL:**
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Server=tcp:your-server.database.windows.net,1433;Initial Catalog=PetCareX;User ID=your-user;Password=your-pass;Encrypt=True;Connection Timeout=30;"
+}
+```
+
+### 5. Tạo database
+```bash
+dotnet ef database update
+```
+
+### 6. Chạy ứng dụng
+```bash
+dotnet run
+```
+
+API chạy tại: **http://localhost:5000**
+
+Swagger docs: **http://localhost:5000/swagger**
+| `GET /api/employees` | Danh sách nhân viên |
+| `GET /swagger` | API Documentation |
+
+## 🔐 Authentication
+
+Hệ thống sử dụng **JWT Token**:
+
+1. Login: `POST /api/auth/login`
+   ```json
+   {
+     "username": "user@example.com",
+     "password": "password123"
+   }
+   ```
+
+2. Sử dụng token trong header:
+   ```
+   Authorization: Bearer <your-jwt-token>
+   ```
+
+## 📝 Cấu hình chính (appsettings.json)
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=localhost;Database=PetCareX;..."
+  },
+  "Jwt": {
+    "SecretKey": "your-secret-key-here",
+    "Issuer": "PetCareX",
+    "Audience": "PetCareX-Users"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information"
+    }
+  }
+}
+```
+
+## 🐛 Troubleshooting
+
+### Error: "Database connection failed"
+- Kiểm tra SQL Server đang chạy
+- Kiểm tra connection string trong appsettings.json
+- Kiểm tra quyền truy cập database
+
+### Error: "EF migrations not applied"
+```bash
+# Xóa migrations và tạo lại
+dotnet ef database drop
+dotnet ef database update
+```
+
+### Port 5000 đã được sử dụng
+```bash
+dotnet run --urls="https://localhost:5001"
+```
+
+## 📞 Support & Contact
+
+Nếu gặp lỗi hoặc có câu hỏi, vui lòng tạo issue trên GitHub hoặc liên hệ team phát triển.
+
+---
+
+**Happy Coding! 🚀**
 
 ### 3. Cập nhật Database Connection String
 

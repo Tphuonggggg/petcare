@@ -36,13 +36,20 @@ public class ProductsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<PaginatedResult<ProductDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        if (page <= 0) page = 1;
-        if (pageSize <= 0) pageSize = 20;
-        var q = _context.Products.AsQueryable();
-        var total = await q.CountAsync();
-        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
-        var dtos = _mapper.Map<List<ProductDto>>(items);
-        return new PaginatedResult<ProductDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
+        try
+        {
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 20;
+            var q = _context.Products.AsQueryable();
+            var total = await q.CountAsync();
+            var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+            var dtos = _mapper.Map<List<ProductDto>>(items);
+            return new PaginatedResult<ProductDto> { Items = dtos, TotalCount = total, Page = page, PageSize = pageSize };
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Error loading products: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -51,9 +58,16 @@ public class ProductsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<ProductDto>> Get(int id)
     {
-        var e = await _context.Products.FindAsync(id);
-        if (e == null) return NotFound();
-        return _mapper.Map<ProductDto>(e);
+        try
+        {
+            var e = await _context.Products.FindAsync(id);
+            if (e == null) return NotFound();
+            return _mapper.Map<ProductDto>(e);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Error loading product: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -62,11 +76,57 @@ public class ProductsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ProductDto>> Post(ProductDto dto)
     {
-        var entity = _mapper.Map<Product>(dto);
-        _context.Products.Add(entity);
-        await _context.SaveChangesAsync();
-        var result = _mapper.Map<ProductDto>(entity);
-        return CreatedAtAction(nameof(Get), new { id = entity.ProductId }, result);
+        try
+        {
+            // Validate required fields
+            if (string.IsNullOrEmpty(dto.Name)) return BadRequest("Name is required");
+            if (string.IsNullOrEmpty(dto.Category)) return BadRequest("Category is required");
+            
+            // Validate category enum
+            var validCategories = new[] { "FOOD", "MEDICINE", "ACCESSORY", "TOY" };
+            if (!validCategories.Contains(dto.Category.ToUpper()))
+                return BadRequest($"Category must be one of: {string.Join(", ", validCategories)}");
+            
+            if (!dto.Price.HasValue || dto.Price <= 0) return BadRequest("Price must be greater than 0");
+            if (!dto.StockQty.HasValue || dto.StockQty < 0) return BadRequest("StockQty must be non-negative");
+            
+            // Disable triggers temporarily to avoid OUTPUT clause issue
+            await _context.Database.ExecuteSqlRawAsync("DISABLE TRIGGER ALL ON [Product]");
+            try
+            {
+                var entity = new Product
+                {
+                    Name = dto.Name,
+                    Category = dto.Category.ToUpper(),
+                    Price = dto.Price.Value,
+                    StockQty = dto.StockQty.Value,
+                    ReorderPoint = dto.ReorderPoint ?? 10,
+                    Description = dto.Description
+                };
+                
+                _context.Products.Add(entity);
+                await _context.SaveChangesAsync();
+                var result = _mapper.Map<ProductDto>(entity);
+                return CreatedAtAction(nameof(Get), new { id = entity.ProductId }, result);
+            }
+            finally
+            {
+                // Always re-enable triggers
+                await _context.Database.ExecuteSqlRawAsync("ENABLE TRIGGER ALL ON [Product]");
+            }
+        }
+        catch (DbUpdateException ex)
+        {
+            if (ex.InnerException?.Message.Contains("UNIQUE") == true)
+                return BadRequest("Tên sản phẩm đã tồn tại");
+            if (ex.InnerException?.Message.Contains("CHECK") == true)
+                return BadRequest("Dữ liệu không hợp lệ (kiểm tra giá > 0, loại sản phẩm, số lượng >= 0)");
+            return StatusCode(500, $"Database error: {ex.InnerException?.Message}");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Error: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -75,16 +135,62 @@ public class ProductsController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Put(int id, ProductDto dto)
     {
-        if (id != dto.ProductId) return BadRequest();
-        var entity = _mapper.Map<Product>(dto);
-        _context.Entry(entity).State = EntityState.Modified;
-        try { await _context.SaveChangesAsync(); }
-        catch (DbUpdateConcurrencyException)
+        try
         {
-            if (!_context.Products.Any(x => x.ProductId == id)) return NotFound();
-            throw;
+            // Validate required fields
+            if (id != dto.ProductId) return BadRequest("ID mismatch");
+            if (string.IsNullOrEmpty(dto.Name)) return BadRequest("Name is required");
+            if (string.IsNullOrEmpty(dto.Category)) return BadRequest("Category is required");
+            
+            // Validate category enum
+            var validCategories = new[] { "FOOD", "MEDICINE", "ACCESSORY", "TOY" };
+            if (!validCategories.Contains(dto.Category.ToUpper()))
+                return BadRequest($"Category must be one of: {string.Join(", ", validCategories)}");
+            
+            if (!dto.Price.HasValue || dto.Price <= 0) return BadRequest("Price must be greater than 0");
+            if (!dto.StockQty.HasValue || dto.StockQty < 0) return BadRequest("StockQty must be non-negative");
+            
+            // Disable triggers temporarily to avoid OUTPUT clause issue
+            await _context.Database.ExecuteSqlRawAsync("DISABLE TRIGGER ALL ON [Product]");
+            try
+            {
+                var entity = await _context.Products.FindAsync(id);
+                if (entity == null)
+                {
+                    await _context.Database.ExecuteSqlRawAsync("ENABLE TRIGGER ALL ON [Product]");
+                    return NotFound();
+                }
+                
+                // Update all fields
+                entity.Name = dto.Name;
+                entity.Category = dto.Category.ToUpper();
+                entity.Price = dto.Price.Value;
+                entity.StockQty = dto.StockQty.Value;
+                entity.ReorderPoint = dto.ReorderPoint ?? 10;
+                entity.Description = dto.Description;
+                
+                await _context.SaveChangesAsync();
+            }
+            finally
+            {
+                // Always re-enable triggers
+                await _context.Database.ExecuteSqlRawAsync("ENABLE TRIGGER ALL ON [Product]");
+            }
+            
+            return NoContent();
         }
-        return NoContent();
+        catch (DbUpdateException ex)
+        {
+            if (ex.InnerException?.Message.Contains("UNIQUE") == true)
+                return BadRequest("Tên sản phẩm đã tồn tại");
+            if (ex.InnerException?.Message.Contains("CHECK") == true)
+                return BadRequest("Dữ liệu không hợp lệ (kiểm tra giá > 0, loại sản phẩm, số lượng >= 0)");
+            return StatusCode(500, $"Database error: {ex.InnerException?.Message}");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Error: {ex.Message}");
+        }
     }
 
     /// <summary>

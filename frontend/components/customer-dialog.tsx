@@ -68,6 +68,13 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
       setError('Vui lòng nhập email')
       return
     }
+    
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.email.trim())) {
+      setError('Email không hợp lệ')
+      return
+    }
 
     ;(async () => {
       try {
@@ -86,7 +93,12 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
         onOpenChange(false)
       } catch (err: any) {
         console.error('Create customer failed', err)
-        setError(err?.message || 'Tạo khách hàng thất bại')
+        // Handle duplicate email error
+        if (err?.message?.includes('UNIQUE KEY') || err?.message?.includes('duplicate')) {
+          setError('Email này đã được sử dụng, vui lòng nhập email khác')
+        } else {
+          setError(err?.message || 'Tạo khách hàng thất bại')
+        }
       } finally {
         setLoading(false)
       }

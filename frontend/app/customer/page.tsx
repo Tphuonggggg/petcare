@@ -28,23 +28,41 @@ export default function CustomerDashboard() {
     async function load() {
       try {
         const { apiGet } = await import("@/lib/api")
-        const [allPetsRes, allBookingsRes] = await Promise.all([apiGet(`/pets`), apiGet(`/bookings`)])
+        const userId = Number(user.customerId || user.id || user.CustomerId || user.accountId)
+        
+        console.log('Raw user object:', user)
+        console.log('Extracted userId:', userId)
+        
+        if (isNaN(userId)) {
+          console.error('Invalid userId:', userId)
+          return
+        }
+        
+        const [allPetsRes, bookingsRes] = await Promise.all([
+          apiGet(`/pets?customerId=${userId}`),
+          apiGet(`/bookings/customer/${userId}`)
+        ])
+        
         if (!mounted) return
-        let userId = user.customerId || user.id || user.CustomerId;
-        userId = Number(userId); // Đảm bảo là số
-        console.log('userId:', userId, typeof userId);
-        console.log('allBookingsRes:', allBookingsRes);
-        console.log('allPetsRes:', allPetsRes);
-        const petsArr = Array.isArray(allPetsRes?.items) ? allPetsRes.items : [];
-        const bookingsArr = Array.isArray(allBookingsRes?.items) ? allBookingsRes.items : [];
-        const myPets = petsArr.filter((p: any) => Number(p.customerId) === userId);
-        const myBookings = bookingsArr.filter((b: any) => Number(b.customerId) === userId);
-        console.log('myBookings:', myBookings);
-        console.log('myPets:', myPets);
-        setPets(myPets.length ? myPets : []);
-        setBookings(myBookings.length ? myBookings : []);
+        
+        console.log('userId:', userId)
+        console.log('bookingsRes:', bookingsRes)
+        console.log('allPetsRes:', allPetsRes)
+        
+        const petsArr = Array.isArray(allPetsRes?.items) ? allPetsRes.items : (Array.isArray(allPetsRes) ? allPetsRes : [])
+        const bookingsArr = Array.isArray(bookingsRes?.items) ? bookingsRes.items : (Array.isArray(bookingsRes) ? bookingsRes : [])
+        
+        // Filter upcoming bookings only
+        const now = new Date()
+        const upcomingBookings = bookingsArr.filter((b: any) => new Date(b.requestedDateTime) >= now)
+        
+        console.log('upcomingBookings:', upcomingBookings)
+        console.log('allPetsRes:', petsArr)
+        
+        setPets(petsArr.length ? petsArr : [])
+        setBookings(upcomingBookings.length ? upcomingBookings : [])
       } catch (e) {
-        // ignore, keep UI defaults
+        console.error('Error loading data:', e)
       }
     }
     load()

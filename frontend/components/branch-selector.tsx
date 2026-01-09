@@ -17,9 +17,12 @@ export default function BranchSelector({ onSelected }: { onSelected?: (b: any) =
         const { apiGet } = await import('@/lib/api')
         const data = await apiGet('/branches')
         if (!mounted) return
-        setBranches(Array.isArray(data) ? data : [])
+        // Handle both array and PaginatedResult response
+        const items = Array.isArray(data) ? data : (data?.items || [])
+        setBranches(items)
       } catch (err) {
         // fallback to empty
+        console.error('Error loading branches:', err)
         setBranches([])
       } finally { if (mounted) setLoading(false) }
     })()

@@ -47,7 +47,10 @@ public class MappingProfile : Profile
             CreateMap<Product, ProductDto>()
                 .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.StockQty));
             CreateMap<ProductDto, Product>()
-                .ForMember(dest => dest.StockQty, opt => opt.MapFrom(src => src.Quantity ?? src.StockQty ?? 0));
+                .ForMember(dest => dest.StockQty, opt => opt.MapFrom(src => src.Quantity ?? src.StockQty ?? 0))
+                .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Price ?? 0))
+                .ForMember(dest => dest.ReorderPoint, opt => opt.MapFrom(src => src.ReorderPoint ?? 10))
+                .ForMember(dest => dest.Category, opt => opt.MapFrom(src => src.Category ?? ""));
 
             CreateMap<Position, PositionDto>();
             CreateMap<PositionDto, Position>();
@@ -107,5 +110,10 @@ public class MappingProfile : Profile
 
             CreateMap<BookingHistory, BookingHistoryDto>();
             CreateMap<BookingHistoryDto, BookingHistory>();
+
+            CreateMap<Employee, EmployeeDto>()
+                .ForMember(dest => dest.Branch, opt => opt.MapFrom(src => src.Branch))
+                .ForMember(dest => dest.Position, opt => opt.MapFrom(src => src.Position));
+            CreateMap<EmployeeDto, Employee>();
     }
 }

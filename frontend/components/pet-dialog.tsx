@@ -92,10 +92,10 @@ export function PetDialog({
       const petData = {
         customerId: cId,
         name: values.name,
-        species: values.species,
+        species: values.species && values.species !== "auto" ? values.species : null,
         breed: values.breed || null,
-        birthDate: values.birthDate ? new Date(values.birthDate).toISOString() : null,
-        gender: values.gender || null,
+        birthDate: values.birthDate || null,
+        gender: values.gender && values.gender !== "auto" ? values.gender : null,
         status: values.status || "active",
       }
 
@@ -152,13 +152,14 @@ export function PetDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Loài thú *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} defaultValue={field.value || "auto"}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Chọn loài thú" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="auto" disabled>Chọn loài thú</SelectItem>
                       <SelectItem value="Chó">Chó</SelectItem>
                       <SelectItem value="Mèo">Mèo</SelectItem>
                       <SelectItem value="Thỏ">Thỏ</SelectItem>
@@ -210,16 +211,17 @@ export function PetDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Giới tính</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value || "auto"}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Chọn giới tính" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="Đực">Đực</SelectItem>
-                        <SelectItem value="Cái">Cái</SelectItem>
-                        <SelectItem value="Chưa xác định">Chưa xác định</SelectItem>
+                        <SelectItem value="auto" disabled>Chọn giới tính</SelectItem>
+                        <SelectItem value="M">Đực</SelectItem>
+                        <SelectItem value="F">Cái</SelectItem>
+                        <SelectItem value="U">Chưa xác định</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

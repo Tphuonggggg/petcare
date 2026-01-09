@@ -209,15 +209,22 @@ export default function DoctorSchedulesPage() {
                 </div>
 
                 {selectedDoctor && doctors.find((d) => d.employeeId === selectedDoctor) && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200 space-y-2">
                     <p className="text-xs text-muted-foreground mb-1">Đã chọn</p>
-                    <p className="font-medium text-sm">
-                      {doctors.find((d) => d.employeeId === selectedDoctor)?.fullName}
-                    </p>
+                    <div>
+                      <p className="font-medium text-sm">
+                        {doctors.find((d) => d.employeeId === selectedDoctor)?.fullName}
+                      </p>
+                      {doctors.find((d) => d.employeeId === selectedDoctor)?.branch?.name && (
+                        <p className="text-xs text-blue-700 mt-1 flex items-center gap-1">
+                          📍 {doctors.find((d) => d.employeeId === selectedDoctor)?.branch?.name}
+                        </p>
+                      )}
+                    </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full mt-2 h-8 text-xs"
+                      className="w-full h-8 text-xs"
                       onClick={() => {
                         setSelectedDoctor(null)
                         setSearchTerm("")

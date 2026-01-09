@@ -131,7 +131,7 @@ export default function CreateOrderPage() {
         discountAmount: 0,
         finalAmount: totalAmount,
         paymentMethod: paymentMethod,
-        status: "Paid", // Set to Paid when customer pays
+        status: "Pending", // New orders start as Pending (not yet paid)
         items: orderItems.map(item => ({
           productId: item.productId,
           itemType: "PRODUCT",

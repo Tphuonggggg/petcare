@@ -1,103 +1,67 @@
 # PetCareX Frontend
 
-**Giao diện người dùng hiện đại** - Next.js web app cho hệ thống quản lý thú cưng toàn diện.
+Next.js giao diện người dùng cho hệ thống quản lý thú cưng.
 
-## 🎯 Tính năng chính
+## 📋 Yêu cầu
 
-- ✅ **Dashboard theo vai trò** - Giao diện riêng cho Vet, Receptionist, Sales, Admin, Customer
-- ✅ **Quản lý lịch hẹn** - Đặt, chỉnh sửa, hủy lịch hẹn
-- ✅ **Quản lý thú cưng** - Hồ sơ, tiêu sử y tế, ảnh
-- ✅ **Bán hàng & Hóa đơn** - Giỏ hàng, thanh toán, in hóa đơn
-- ✅ **Quản lý chi nhánh** - Multi-branch support
-- ✅ **Responsive Design** - Mobile, tablet, desktop friendly
-- ✅ **Mock API** - Phát triển frontend mà không cần backend
-
-## 🛠️ Tech Stack
-
-| Công nghệ | Phiên bản | Mục đích |
-|-----------|----------|---------|
-| **Next.js** | 16.0+ | React framework |
-| **React** | 19.2+ | UI library |
-| **TypeScript** | 5.0+ | Type safety |
-| **Tailwind CSS** | 4.1+ | Styling |
-| **Shadcn/ui** | Latest | UI components |
-| **React Hook Form** | 7.60+ | Form management |
-| **Recharts** | 2.15+ | Charts & graphs |
-
-## 📋 Prerequisites
-
-- ✅ **Node.js 18+** & **npm/pnpm**
-  ```bash
-  node --version
-  npm --version
-  ```
-
-- ✅ **Backend API** (optional khi dùng mock)
-  - http://localhost:5000 (production)
-  - Mock data built-in (development)
+- **Node.js 18+** - [Download](https://nodejs.org/)
+- **npm hoặc pnpm**
 
 ## 🚀 Cài đặt & Chạy
 
-### 1. Clone dự án
+### 1. Vào thư mục frontend
 ```bash
-cd d:\CODE\PetCareX\frontend
+cd PetCareX/frontend
 ```
 
-### 2. Install dependencies
+### 2. Kiểm tra Node.js
+```bash
+node --version
+npm --version
+```
+
+### 3. Cài đặt dependencies
 ```bash
 npm install
-# hoặc dùng pnpm (nhanh hơn)
+```
+
+Hoặc nếu dùng **pnpm** (nhanh hơn):
+```bash
 pnpm install
 ```
 
-### 3. Cấu hình Environment
+### 4. Cấu hình Backend API (tùy chọn)
 
 Tạo file `.env.local`:
 ```env
-# Backend API URL (bỏ trống = dùng mock data)
 NEXT_PUBLIC_API_URL=http://localhost:5000
-
-# Hoặc dùng mock data:
-NEXT_PUBLIC_USE_MOCKS=true
 ```
 
-### 4. Chạy development server
+Bỏ trống nếu dùng mock data.
 
+### 5. Chạy development server
 ```bash
 npm run dev
 ```
 
 Mở http://localhost:3000 trong trình duyệt.
 
-### 5. Build for production
-
+### 6. Build production
 ```bash
 npm run build
 npm start
 ```
 
-## 📁 Cấu trúc dự án
+## 📁 Cấu trúc thư mục
 
 ```
-frontend/
-├── app/                      # Next.js App Router
-│   ├── admin/               # Admin dashboard
-│   │   ├── customers/       # Quản lý khách hàng
-│   │   ├── employees/       # Quản lý nhân viên
-│   │   ├── services/        # Quản lý dịch vụ
-│   │   └── page.tsx
-│   │
-│   ├── reception/           # Receptionist dashboard
-│   │   ├── check-in/        # Check-in khách hàng
-│   │   ├── customers/       # Tìm kiếm khách hàng
-│   │   ├── bookings/        # Quản lý lịch hẹn
-│   │   └── page.tsx
-│   │
-│   ├── vet/                 # Vet dashboard
-│   │   ├── pets/            # Quản lý thú cưng
-│   │   ├── records/         # Hồ sơ y tế
-│   │   ├── services/        # Dịch vụ thú y
-│   │   └── page.tsx
+app/              # Next.js App Router
+components/       # React components
+hooks/           # Custom hooks
+lib/             # Utilities & helpers
+public/          # Static files
+styles/          # CSS files
+```
 │   │
 │   ├── sales/               # Sales dashboard
 │   │   ├── products/        # Quản lý sản phẩm

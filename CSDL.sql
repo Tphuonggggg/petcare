@@ -252,7 +252,7 @@ CREATE TABLE Invoice (
     Status NVARCHAR(20) NOT NULL DEFAULT 'Pending',
 
     CONSTRAINT CK_Invoice_Total CHECK (TotalAmount > 0),
-    CONSTRAINT CK_Invoice_Discount CHECK (DiscountAmount >= 0),
+    CONSTRAINT CK_Invoice_Discount CHECK (DiscountAmount >= 0 AND DiscountAmount <= TotalAmount),
     CONSTRAINT CK_Invoice_Method CHECK (PaymentMethod IN ('CASH','CARD','BANKING')),
     CONSTRAINT CK_Invoice_Status CHECK (Status IN ('Pending','Paid','Cancelled')),
 
@@ -3363,12 +3363,51 @@ BEGIN
 END;
 GO
 
-UPDATE C
-SET TotalYearlySpend = ISNULL(T.Total, 0),
-    PointsBalance = ISNULL(T.Total, 0) / 50000
-FROM Customer C
-LEFT JOIN (SELECT CustomerID, SUM(FinalAmount) AS Total FROM Invoice GROUP BY CustomerID) T 
-ON C.CustomerID = T.CustomerID;
+-- =============================================
+-- Cập nhật TotalYearlySpend & PointsBalance với kiểm tra
+-- =============================================
+BEGIN TRY
+    BEGIN TRANSACTION;
+    
+    -- Validate: Kiểm tra dữ liệu hóa đơn không hợp lệ
+    IF EXISTS (
+        SELECT 1 FROM Invoice 
+        WHERE FinalAmount IS NULL OR FinalAmount < 0 OR CustomerID IS NULL
+    )
+    BEGIN
+        RAISERROR(N'❌ Lỗi: Phát hiện Invoice không hợp lệ!', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END
+    
+    UPDATE C
+    SET TotalYearlySpend = ISNULL(T.Total, 0),
+        PointsBalance = CAST(ISNULL(T.Total, 0) / 50000 AS INT)
+    FROM Customer C
+    LEFT JOIN (
+        SELECT CustomerID, SUM(FinalAmount) AS Total 
+        FROM Invoice 
+        WHERE Status = 'Paid'
+        GROUP BY CustomerID
+    ) T ON C.CustomerID = T.CustomerID;
+    
+    -- Validate: Không được có giá trị âm
+    IF EXISTS (SELECT 1 FROM Customer WHERE TotalYearlySpend < 0 OR PointsBalance < 0)
+    BEGIN
+        RAISERROR(N'❌ Lỗi: Phát hiện giá trị âm sau update!', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END
+    
+    COMMIT TRANSACTION;
+    PRINT N'✓ Cập nhật TotalYearlySpend & PointsBalance thành công';
+END TRY
+BEGIN CATCH
+    ROLLBACK TRANSACTION;
+    PRINT N'❌ Lỗi: ' + ERROR_MESSAGE();
+    THROW;
+END CATCH
+GO
 
 /*============================================================
   Tên: usp_Customer_GetInvoiceHistory
@@ -3531,13 +3570,6 @@ BEGIN
 END;
 GO
 
-/*============================================================
-  Thêm cột Status vào bảng Invoice
-============================================================*/
-ALTER TABLE Invoice 
-ADD Status NVARCHAR(20) DEFAULT N'Pending'; -- Các trạng thái: Pending, Paid, Cancelled
-
-GO
 /*============================================================
   Tên: usp_Staff_CreateOrder
   Chức năng: Khởi tạo một đơn hàng mới (Trạng thái Pending)
@@ -3859,28 +3891,43 @@ PRINT '========================================';
 PRINT '';
 
 -- =============================================
--- Bước 1: Kiểm tra và thêm cột BranchID
+-- Bước 1: Kiểm tra & thêm cột BranchID
 -- =============================================
-IF NOT EXISTS (
-    SELECT 1 
-    FROM sys.columns 
-    WHERE object_id = OBJECT_ID('dbo.Booking') 
-    AND name = 'BranchID'
-)
-BEGIN
-    PRINT '[Bước 1] Thêm cột BranchID vào bảng Booking...';
+BEGIN TRY
+    PRINT '[Bước 1] Kiểm tra & thêm cột BranchID...';
     
-    ALTER TABLE dbo.Booking
-    ADD BranchID INT NULL;
+    -- Validate: Bảng Booking phải tồn tại
+    IF OBJECT_ID('dbo.Booking', 'U') IS NULL
+    BEGIN
+        RAISERROR(N'❌ Bảng Booking không tồn tại!', 16, 1);
+        RETURN;
+    END
     
-    PRINT '✓ Đã thêm cột BranchID (nullable)';
+    -- Kiểm tra cột đã tồn tại
+    IF NOT EXISTS (
+        SELECT 1 FROM sys.columns 
+        WHERE object_id = OBJECT_ID('dbo.Booking', 'U') 
+        AND name = 'BranchID'
+    )
+    BEGIN
+        ALTER TABLE dbo.Booking ADD BranchID INT NULL;
+        PRINT '✓ Đã thêm cột BranchID (nullable)';
+    END
+    ELSE
+    BEGIN
+        DECLARE @IsNullable BIT;
+        SELECT @IsNullable = is_nullable 
+        FROM sys.columns 
+        WHERE object_id = OBJECT_ID('dbo.Booking', 'U') 
+        AND name = 'BranchID';
+        PRINT '⚠ Cột BranchID đã tồn tại (nullable=' + CAST(@IsNullable AS VARCHAR(1)) + ')';
+    END
     PRINT '';
-END
-ELSE
-BEGIN
-    PRINT '[Bước 1] Cột BranchID đã tồn tại - bỏ qua';
-    PRINT '';
-END
+END TRY
+BEGIN CATCH
+    PRINT N'❌ Lỗi: ' + ERROR_MESSAGE();
+    THROW;
+END CATCH
 GO
 
 -- =============================================
@@ -3941,11 +3988,6 @@ SET @UpdatedRows = @@ROWCOUNT;
 
 PRINT '✓ Đã cập nhật BranchID cho ' + CAST(@UpdatedRows AS VARCHAR) + ' booking';
 PRINT '';
-GO
-
-PRINT '✓ Đã cập nhật BranchID cho ' + CAST(@UpdatedRows AS VARCHAR) + ' booking';
-PRINT '';
-GO
 
 -- =============================================
 -- Bước 3: Kiểm tra dữ liệu sau khi cập nhật
@@ -4180,3 +4222,63 @@ SET B.DoctorID = AD.EmployeeID
 FROM Booking B
 INNER JOIN AssignedDoctors AD ON B.BookingID = AD.BookingID;
 ---------------------------------------------------------------------
+
+-- Script THÊM DỮ LIỆU InvoiceItem MỚI (không xóa cái cũ)
+-- Tham khảo từ CSDL.sql - thêm 3-5 sản phẩm/dịch vụ ngẫu nhiên vào mỗi hóa đơn
+-- Tự động tránh trùng lặp items trong cùng hóa đơn
+;WITH ProductAndServiceList AS (
+    -- Lấy danh sách sản phẩm
+    SELECT 
+        InvoiceID,
+        ProductID,
+        NULL AS ServiceID,
+        'PRODUCT' AS ItemType,
+        Price AS UnitPrice,
+        ROW_NUMBER() OVER (PARTITION BY InvoiceID ORDER BY NEWID()) AS RowNum
+    FROM Invoice i
+    CROSS JOIN Product p
+    WHERE NOT EXISTS (
+        SELECT 1 FROM InvoiceItem ii 
+        WHERE ii.InvoiceID = i.InvoiceID 
+        AND ii.ProductID = p.ProductID
+        AND ii.ItemType = 'PRODUCT'
+    )
+    
+    UNION ALL
+    
+    -- Lấy danh sách dịch vụ
+    SELECT 
+        InvoiceID,
+        NULL AS ProductID,
+        ServiceID,
+        'SERVICE' AS ItemType,
+        BasePrice AS UnitPrice,
+        ROW_NUMBER() OVER (PARTITION BY InvoiceID ORDER BY NEWID()) AS RowNum
+    FROM Invoice i
+    CROSS JOIN Service s
+    WHERE NOT EXISTS (
+        SELECT 1 FROM InvoiceItem ii 
+        WHERE ii.InvoiceID = i.InvoiceID 
+        AND ii.ServiceID = s.ServiceID
+        AND ii.ItemType = 'SERVICE'
+    )
+)
+INSERT INTO InvoiceItem (InvoiceID, ItemType, ProductID, ServiceID, Quantity, UnitPrice)
+SELECT 
+    InvoiceID,
+    ItemType,
+    ProductID,
+    ServiceID,
+    (ABS(CHECKSUM(NEWID())) % 5) + 1 AS Quantity,
+    UnitPrice
+FROM ProductAndServiceList
+WHERE RowNum <= (ABS(CHECKSUM(NEWID())) % 3 + 3)
+AND NOT EXISTS (
+    SELECT 1 FROM InvoiceItem ii
+    WHERE ii.InvoiceID = ProductAndServiceList.InvoiceID
+    AND (
+        (ii.ItemType = 'PRODUCT' AND ii.ProductID = ProductAndServiceList.ProductID)
+        OR 
+        (ii.ItemType = 'SERVICE' AND ii.ServiceID = ProductAndServiceList.ServiceID)
+    )
+);

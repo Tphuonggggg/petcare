@@ -21,7 +21,7 @@ public class ProductDto
     public string? Category { get; set; }
 
     /// <summary>Unit price (optional).</summary>
-    [Range(0, double.MaxValue, ErrorMessage = "Price must be non-negative.")]
+    [Range(0.01, double.MaxValue, ErrorMessage = "Price must be greater than 0.")]
     public decimal? Price { get; set; }
 
     /// <summary>Stock quantity (optional).</summary>
