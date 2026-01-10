@@ -218,7 +218,7 @@ export default function StaffOrderDetailPage() {
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Ngày đặt:</span>
               <span className="font-medium">
-                {new Date(order.invoiceDate).toLocaleDateString('vi-VN')}
+                {new Date(order.invoiceDate).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
               </span>
             </div>
             <div className="flex justify-between text-sm">

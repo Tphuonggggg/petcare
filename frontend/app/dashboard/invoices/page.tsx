@@ -301,7 +301,7 @@ export default function InvoicesPage() {
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg">Hóa đơn #{invoice.invoiceId}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {invoice.customerName} - {new Date(invoice.invoiceDate).toLocaleDateString('vi-VN')}
+                      {invoice.customerName} - {new Date(invoice.invoiceDate).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Chi nhánh: {invoice.branchName}
@@ -418,7 +418,7 @@ export default function InvoicesPage() {
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Ngày lập hóa đơn</label>
                   <p className="text-sm font-medium mt-1">
-                    {new Date(selectedInvoice.invoiceDate).toLocaleDateString('vi-VN')}
+                    {new Date(selectedInvoice.invoiceDate).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
                   </p>
                 </div>
               </div>

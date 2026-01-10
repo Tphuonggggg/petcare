@@ -1,115 +1,19 @@
 # PetCareX Frontend
 
-Next.js giao diện người dùng cho hệ thống quản lý thú cưng.
-
 ## 📋 Yêu cầu
 
-- **Node.js 18+** - [Download](https://nodejs.org/)
+- **Node.js 18+**
 - **npm hoặc pnpm**
 
 ## 🚀 Cài đặt & Chạy
 
-### 1. Vào thư mục frontend
 ```bash
 cd PetCareX/frontend
-```
-
-### 2. Kiểm tra Node.js
-```bash
-node --version
-npm --version
-```
-
-### 3. Cài đặt dependencies
-```bash
 npm install
-```
-
-Hoặc nếu dùng **pnpm** (nhanh hơn):
-```bash
-pnpm install
-```
-
-### 4. Cấu hình Backend API (tùy chọn)
-
-Tạo file `.env.local`:
-```env
-NEXT_PUBLIC_API_URL=http://localhost:5000
-```
-
-Bỏ trống nếu dùng mock data.
-
-### 5. Chạy development server
-```bash
 npm run dev
 ```
 
-Mở http://localhost:3000 trong trình duyệt.
-
-### 6. Build production
-```bash
-npm run build
-npm start
-```
-
-## 📁 Cấu trúc thư mục
-
-```
-app/              # Next.js App Router
-components/       # React components
-hooks/           # Custom hooks
-lib/             # Utilities & helpers
-public/          # Static files
-styles/          # CSS files
-```
-│   │
-│   ├── sales/               # Sales dashboard
-│   │   ├── products/        # Quản lý sản phẩm
-│   │   ├── orders/          # Quản lý đơn hàng
-│   │   ├── inventory/       # Quản lý kho
-│   │   └── page.tsx
-│   │
-│   ├── customer/            # Customer portal
-│   │   ├── bookings/        # Xem lịch hẹn
-│   │   ├── pets/            # Quản lý thú cưng
-│   │   ├── invoices/        # Hóa đơn
-│   │   └── page.tsx
-│   │
-│   ├── login/               # Đăng nhập
-│   ├── register/            # Đăng ký
-│   ├── dashboard/           # Shared dashboard
-│   ├── layout.tsx           # Root layout
-│   └── page.tsx             # Home page
-│
-├── components/              # Reusable components
-│   ├── ui/                  # Shadcn UI components (50+ components)
-│   ├── admin/               # Admin-specific components
-│   ├── report/              # Report components
-│   ├── *-nav.tsx            # Role-specific navigation
-│   ├── booking-dialog.tsx
-│   ├── customer-dialog.tsx
-│   └── theme-provider.tsx
-│
-├── hooks/                   # Custom React hooks
-│   ├── use-mobile.ts
-│   └── use-toast.ts
-│
-├── lib/                     # Utility functions
-│   ├── api.ts               # API client (switches mock/real)
-│   ├── auth.ts              # Authentication logic
-│   ├── roleRouting.ts       # Role-based routing
-│   ├── mockApi.ts           # Mock data & endpoints
-│   ├── branch.ts
-│   ├── utils.ts
-│   └── dbTypes.ts           # Type definitions
-│
-├── styles/                  # Global styles
-│   └── globals.css
-│
-├── public/                  # Static assets
-├── tsconfig.json            # TypeScript config
-├── next.config.mjs          # Next.js config
-├── tailwind.config.ts       # Tailwind config
+Mở http://localhost:3000
 ├── package.json
 └── README.md
 ```

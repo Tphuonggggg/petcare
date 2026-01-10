@@ -82,7 +82,7 @@ export default function EditAppointmentPage() {
 
       // Parse booking time
       const date = new Date(booking.bookingTime)
-      setAppointmentDate(date.toISOString().split("T")[0])
+      setAppointmentDate(date.toLocaleDateString('en-CA'))
       setAppointmentTime(
         date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
       )

@@ -287,14 +287,14 @@ export default function BookingDetailPage() {
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">Ngày tiêm</p>
-                          <p className="font-medium">{new Date(record.dateAdministered).toLocaleDateString('vi-VN')}</p>
+                          <p className="font-medium">{new Date(record.dateAdministered).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</p>
                         </div>
                       </div>
                       
                       {record.nextDueDate && (
                         <div>
                           <p className="text-sm text-muted-foreground">Ngày tiêm lần kế tiếp</p>
-                          <p className="font-medium">{new Date(record.nextDueDate).toLocaleDateString('vi-VN')}</p>
+                          <p className="font-medium">{new Date(record.nextDueDate).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</p>
                         </div>
                       )}
                       
@@ -331,7 +331,7 @@ export default function BookingDetailPage() {
                 {existingCheckHealth.followUpDate && (
                   <div>
                     <p className="text-sm text-muted-foreground">Ngày tái khám</p>
-                    <p className="font-medium">{new Date(existingCheckHealth.followUpDate).toLocaleDateString('vi-VN')}</p>
+                    <p className="font-medium">{new Date(existingCheckHealth.followUpDate).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</p>
                   </div>
                 )}
 

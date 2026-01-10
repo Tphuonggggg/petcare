@@ -148,7 +148,7 @@ export default function ReceptionPetDetail() {
               <p className="text-sm font-medium text-muted-foreground">Ngày sinh</p>
               <p className="text-lg font-semibold">
                 {pet.birthDate
-                  ? new Date(pet.birthDate).toLocaleDateString("vi-VN")
+                  ? new Date(pet.birthDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
                   : "Chưa cập nhật"}
               </p>
             </div>

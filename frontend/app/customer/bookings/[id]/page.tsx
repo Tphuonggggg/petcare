@@ -81,7 +81,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
           <div className="space-y-3">
             <div><strong>Mã lịch hẹn:</strong> {booking.bookingId}</div>
             <div><strong>Dịch vụ:</strong> {booking.serviceName ?? booking.bookingType ?? booking.title ?? '-'}</div>
-            <div><strong>Ngày đặt:</strong> {booking.requestedDateTime ? new Date(booking.requestedDateTime).toLocaleString() : (booking.date ? new Date(booking.date).toLocaleString() : '-')}</div>
+            <div><strong>Ngày đặt:</strong> {booking.requestedDateTime ? new Date(booking.requestedDateTime).toLocaleString('vi-VN') : (booking.date ? new Date(booking.date).toLocaleString('vi-VN') : '-')}</div>
             <div><strong>Trạng thái:</strong> {booking.status ?? '-'}</div>
             <div><strong>Ghi chú:</strong> {booking.notes ?? '-'}</div>
             <div><strong>Thú cưng:</strong> {petName || booking.petName || '-'}</div>

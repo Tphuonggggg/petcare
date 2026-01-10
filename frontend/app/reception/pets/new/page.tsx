@@ -237,7 +237,7 @@ export default function NewPetPage() {
                 type="date"
                 value={formData.birthDate}
                 onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-                max={new Date().toISOString().split('T')[0]}
+                max={new Date().toLocaleDateString('en-CA')}
               />
             </div>
 

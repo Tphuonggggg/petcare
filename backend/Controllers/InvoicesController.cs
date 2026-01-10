@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PetCareX.Api.Data;
 using PetCareX.Api.Models;
 using PetCareX.Api.Dtos;
+using PetCareX.Api.Services;
 using AutoMapper;
 using System.Collections.Generic;
 using System.Linq;
@@ -103,7 +104,7 @@ public class InvoicesController : ControllerBase
                 return BadRequest(new { error = "PaymentMethod is required" });
 
             // Sử dụng thời gian từ DTO hoặc thời gian hiện tại của server (có cả giờ phút giây)
-            var invoiceDate = dto.InvoiceDate ?? DateTime.UtcNow;
+            var invoiceDate = dto.InvoiceDate ?? TimeZoneHelper.GetVietnamNow();
             var paymentMethod = dto.PaymentMethod;
             var status = dto.Status ?? "Pending";
 

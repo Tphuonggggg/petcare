@@ -1,109 +1,31 @@
 # PetCareX Backend API
 
-ASP.NET Core 8 API backend cho hệ thống quản lý thú cưng.
-
 ## 📋 Yêu cầu
 
-- **.NET SDK 8.0+** - [Download](https://dotnet.microsoft.com/download)
-- **SQL Server** - Local hoặc Azure SQL Database
+- **.NET SDK 8.0+**
+- **SQL Server**
 
 ## 🚀 Cài đặt & Chạy
 
-### 1. Vào thư mục backend
 ```bash
 cd PetCareX/backend
-```
-
-### 2. Kiểm tra .NET SDK
-```bash
-dotnet --version
-```
-
-### 3. Restore dependencies
-```bash
 dotnet restore
 ```
 
-### 4. Cấu hình Database
-
-Mở file `appsettings.json` và sửa connection string:
-
-**SQL Server Local:**
+Cấu hình `appsettings.json`:
 ```json
 "ConnectionStrings": {
-  "DefaultConnection": "Server=localhost;Database=PetCareX;Trusted_Connection=true;TrustServerCertificate=true;"
+  "DefaultConnection": "Server=localhost;Database=PetCare;Trusted_Connection=true;TrustServerCertificate=true;"
 }
 ```
 
-**Azure SQL:**
-```json
-"ConnectionStrings": {
-  "DefaultConnection": "Server=tcp:your-server.database.windows.net,1433;Initial Catalog=PetCareX;User ID=your-user;Password=your-pass;Encrypt=True;Connection Timeout=30;"
-}
-```
-
-### 5. Tạo database
 ```bash
 dotnet ef database update
-```
-
-### 6. Chạy ứng dụng
-```bash
 dotnet run
 ```
 
-API chạy tại: **http://localhost:5000**
-
-Swagger docs: **http://localhost:5000/swagger**
-| `GET /api/employees` | Danh sách nhân viên |
-| `GET /swagger` | API Documentation |
-
-## 🔐 Authentication
-
-Hệ thống sử dụng **JWT Token**:
-
-1. Login: `POST /api/auth/login`
-   ```json
-   {
-     "username": "user@example.com",
-     "password": "password123"
-   }
-   ```
-
-2. Sử dụng token trong header:
-   ```
-   Authorization: Bearer <your-jwt-token>
-   ```
-
-## 📝 Cấu hình chính (appsettings.json)
-
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost;Database=PetCareX;..."
-  },
-  "Jwt": {
-    "SecretKey": "your-secret-key-here",
-    "Issuer": "PetCareX",
-    "Audience": "PetCareX-Users"
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information"
-    }
-  }
-}
-```
-
-## 🐛 Troubleshooting
-
-### Error: "Database connection failed"
-- Kiểm tra SQL Server đang chạy
-- Kiểm tra connection string trong appsettings.json
-- Kiểm tra quyền truy cập database
-
-### Error: "EF migrations not applied"
-```bash
+API: http://localhost:5000
+Swagger: http://localhost:5000/swagger
 # Xóa migrations và tạo lại
 dotnet ef database drop
 dotnet ef database update
@@ -114,9 +36,6 @@ dotnet ef database update
 dotnet run --urls="https://localhost:5001"
 ```
 
-## 📞 Support & Contact
-
-Nếu gặp lỗi hoặc có câu hỏi, vui lòng tạo issue trên GitHub hoặc liên hệ team phát triển.
 
 ---
 

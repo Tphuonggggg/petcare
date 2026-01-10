@@ -85,7 +85,7 @@ export default function BranchRevenuePage() {
       const sampleDate = new Date(inv.issuedAt || inv.createdAt || new Date().toISOString())
       let label = key
       if (period === 'day') {
-        label = sampleDate.toLocaleDateString('vi-VN')
+        label = sampleDate.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
       } else if (period === 'month') {
         label = `Tháng ${sampleDate.getMonth() + 1}/${sampleDate.getFullYear()}`
       } else if (period === 'quarter') {

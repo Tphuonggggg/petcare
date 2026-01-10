@@ -40,7 +40,8 @@ export default function VetPage() {
   const loadBookings = async (brId: number) => {
     try {
       setLoading(true)
-      const today = new Date().toISOString().split('T')[0]
+      // Get local date (YYYY-MM-DD) without timezone conversion
+      const today = new Date().toLocaleDateString('en-CA') // en-CA format gives YYYY-MM-DD
       const data = await apiGet(`/receptionistdashboard/today-bookings?branchId=${brId}&date=${today}`)
       setBookings(data || [])
     } catch (error) {
@@ -126,7 +127,7 @@ export default function VetPage() {
   const formatTime = (dateTime: string) => {
     try {
       const date = new Date(dateTime)
-      return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+      return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })
     } catch {
       return dateTime
     }

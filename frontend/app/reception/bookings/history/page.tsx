@@ -31,8 +31,10 @@ export default function BookingHistoryPage() {
   const loadBookings = async () => {
     try {
       setLoading(true)
+      // Get date in YYYY-MM-DD format without timezone conversion
+      const dateString = currentDate.toLocaleDateString('en-CA') // en-CA format gives YYYY-MM-DD
       const data = await apiGet(
-        `/receptionistdashboard/today-bookings?date=${currentDate.toISOString()}`
+        `/receptionistdashboard/today-bookings?date=${dateString}`
       )
       setBookings(data || [])
     } catch (error) {
@@ -81,6 +83,7 @@ export default function BookingHistoryPage() {
       year: "numeric",
       month: "long",
       day: "numeric",
+      timeZone: "Asia/Ho_Chi_Minh"
     })
   }
 
@@ -171,7 +174,7 @@ export default function BookingHistoryPage() {
 
               <div className="text-lg font-bold min-w-[200px] text-center">
                 {viewMode === "month"
-                  ? currentDate.toLocaleDateString("vi-VN", { month: "long", year: "numeric" })
+                  ? currentDate.toLocaleDateString("vi-VN", { month: "long", year: "numeric", timeZone: "Asia/Ho_Chi_Minh" })
                   : formatDate(currentDate)}
               </div>
             </div>
@@ -210,6 +213,7 @@ export default function BookingHistoryPage() {
                           {new Date(booking.bookingTime).toLocaleTimeString("vi-VN", {
                             hour: "2-digit",
                             minute: "2-digit",
+                            timeZone: "Asia/Ho_Chi_Minh"
                           })}
                         </p>
                         <p className="text-sm text-muted-foreground">{booking.customerName}</p>

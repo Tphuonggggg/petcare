@@ -194,7 +194,6 @@ export default function NewAppointmentPage() {
 
     try {
       setSubmitting(true)
-      const bookingDateTime = new Date(`${appointmentDate}T${appointmentTime}`)
       const branchId = typeof window !== 'undefined' ? localStorage.getItem('branchId') : null
       
       console.log("[DEBUG] branchId from localStorage:", branchId)
@@ -217,7 +216,7 @@ export default function NewAppointmentPage() {
         petId: parseInt(selectedPetId),
         branchId: parseInt(branchId),
         bookingType: bookingType,
-        requestedDateTime: bookingDateTime.toISOString(),
+        requestedDateTime: `${appointmentDate}T${appointmentTime}`,
         status: "Pending",
         doctorId: selectedDoctorId ? parseInt(selectedDoctorId) : null,
       }

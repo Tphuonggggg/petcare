@@ -105,7 +105,7 @@ export default function EditPetPage() {
       if (found) {
         setPet(found)
         const birthDate = found.birthDate
-          ? new Date(found.birthDate).toISOString().split("T")[0]
+          ? new Date(found.birthDate).toLocaleDateString('en-CA')
           : ""
         form.reset({
           name: found.name,
@@ -139,7 +139,7 @@ export default function EditPetPage() {
         Name: values.name,
         Species: values.species,
         Breed: values.breed || null,
-        BirthDate: values.birthDate ? new Date(values.birthDate).toISOString() : null,
+        BirthDate: values.birthDate ? values.birthDate : null,
         Gender: values.gender || null,
       }
 

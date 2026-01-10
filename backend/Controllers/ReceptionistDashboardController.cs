@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PetCareX.Api.Data;
 using PetCareX.Api.Dtos;
+using PetCareX.Api.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,7 +34,7 @@ public class ReceptionistDashboardController : ControllerBase
     [HttpGet("summary")]
     public async Task<ActionResult<DashboardSummaryDto>> GetDashboardSummary([FromQuery] int branchId, [FromQuery] DateTime? date = null)
     {
-        var targetDate = date ?? DateTime.Today;
+        var targetDate = date ?? TimeZoneHelper.GetVietnamToday();
         var startOfDay = targetDate.Date;
         var endOfDay = startOfDay.AddDays(1);
 
@@ -51,10 +52,10 @@ public class ReceptionistDashboardController : ControllerBase
         var completedBookings = todayBookings.Count(b => b.Status == "Completed");
 
         // Đếm khách hàng mới của chi nhánh (có invoice tại chi nhánh trong 7 ngày qua)
-        var sevenDaysAgo = DateOnly.FromDateTime(targetDate.AddDays(-7));
+        var sevenDaysAgo = targetDate.AddDays(-7);
         var newCustomers = await _context.Invoices
             .Where(i => i.BranchId == branchId && 
-                       i.InvoiceDate >= DateTime.Parse(sevenDaysAgo.ToString()))
+                       i.InvoiceDate >= sevenDaysAgo)
             .Select(i => i.CustomerId)
             .Distinct()
             .CountAsync();
@@ -77,7 +78,7 @@ public class ReceptionistDashboardController : ControllerBase
     [HttpGet("today-bookings")]
     public async Task<ActionResult<List<BookingDetailDto>>> GetTodayBookings([FromQuery] int branchId, [FromQuery] DateTime? date = null)
     {
-        var targetDate = date ?? DateTime.Today;
+        var targetDate = date ?? TimeZoneHelper.GetVietnamToday();
         var startOfDay = targetDate.Date;
         var endOfDay = startOfDay.AddDays(1);
         
@@ -124,8 +125,8 @@ public class ReceptionistDashboardController : ControllerBase
     [HttpGet("waiting-customers")]
     public async Task<ActionResult<List<WaitingCustomerDto>>> GetWaitingCustomers([FromQuery] int branchId)
     {
-        var today = DateTime.Today;
-        var now = DateTime.Now;
+        var today = TimeZoneHelper.GetVietnamToday();
+        var now = TimeZoneHelper.GetVietnamNow();
 
         // Filter by branch through customer invoices
         var branchCustomerIds = await _context.Invoices
@@ -139,6 +140,7 @@ public class ReceptionistDashboardController : ControllerBase
             .Include(b => b.Pet)
             .Where(b => b.RequestedDateTime.Date == today && 
                        b.Status == "Pending" &&
+                       b.RequestedDateTime >= now &&
                        b.RequestedDateTime <= now.AddHours(2) && // Trong vòng 2 giờ tới
                        branchCustomerIds.Contains(b.CustomerId))
             .OrderBy(b => b.RequestedDateTime)
@@ -167,7 +169,7 @@ public class ReceptionistDashboardController : ControllerBase
     [HttpGet("recent-customers")]
     public async Task<ActionResult<List<RecentCustomerDto>>> GetRecentCustomers([FromQuery] int days = 30)
     {
-        var cutoffDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-days));
+        var cutoffDate = DateOnly.FromDateTime(TimeZoneHelper.GetVietnamToday().AddDays(-days));
 
         var recentCustomers = await _context.Customers
             .Include(c => c.MembershipTier)
@@ -254,7 +256,7 @@ public class ReceptionistDashboardController : ControllerBase
                 OldStatus = "Pending",
                 NewStatus = "Confirmed",
                 ActionType = "CheckIn",
-                Timestamp = DateTime.Now,
+                Timestamp = TimeZoneHelper.GetVietnamNow(),
                 Notes = $"Check-in bởi nhân viên ID: {request.EmployeeId}"
             };
 
@@ -316,7 +318,7 @@ public class ReceptionistDashboardController : ControllerBase
     [HttpGet("hourly-bookings")]
     public async Task<ActionResult<List<HourlyBookingDto>>> GetHourlyBookings([FromQuery] DateTime? date = null)
     {
-        var targetDate = date ?? DateTime.Today;
+        var targetDate = date ?? TimeZoneHelper.GetVietnamToday();
         var startOfDay = targetDate.Date;
         var endOfDay = startOfDay.AddDays(1);
 
@@ -506,7 +508,7 @@ public class ReceptionistDashboardController : ControllerBase
         Console.WriteLine($"[DEBUG] Total bookings after filters: {totalCount}");
 
         // Optimized: Sort in SQL using CASE statements (translatable to SQL)
-        var today = DateTime.Now.Date;
+        var today = TimeZoneHelper.GetVietnamToday();
         var tomorrow = today.AddDays(1);
         
         var bookings = await query

@@ -224,7 +224,7 @@ export default function ReceptionCustomersPage() {
     if (!dateString) return 'Chưa có'
     try {
       const date = new Date(dateString)
-      return date.toLocaleDateString('vi-VN')
+      return date.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
     } catch {
       return 'Không xác định'
     }

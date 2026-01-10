@@ -4,6 +4,7 @@ using Microsoft.Data.SqlClient;
 using PetCareX.Api.Data;
 using PetCareX.Api.Models;
 using PetCareX.Api.Dtos;
+using PetCareX.Api.Services;
 using AutoMapper;
 using System.Collections.Generic;
 using System.Data;
@@ -129,7 +130,7 @@ public class CustomersController : ControllerBase
             entity.Cccd ??= (100000000000 + new Random().Next(1000000)).ToString(); // Random 12-digit CCCD
             entity.Gender ??= "O"; // Other
             if (entity.BirthDate == default)
-                entity.BirthDate = DateOnly.FromDateTime(DateTime.Today.AddYears(-30)); // Default to 30 years ago
+                entity.BirthDate = DateOnly.FromDateTime(TimeZoneHelper.GetVietnamToday().AddYears(-30)); // Default to 30 years ago
 
             // Use raw SQL to avoid OUTPUT clause issue with triggers
             var newCustomerId = await _context.Database.SqlQueryRaw<int>(

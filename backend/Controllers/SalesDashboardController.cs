@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PetCareX.Api.Data;
+using PetCareX.Api.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -35,7 +36,7 @@ public class SalesDashboardController : ControllerBase
     {
         try 
         {
-            var targetDate = date ?? DateTime.Today;
+            var targetDate = date ?? TimeZoneHelper.GetVietnamToday();
             
             // Get invoices for last 7 days instead of just today to show meaningful data
             var startOfWeek = targetDate.Date.AddDays(-7);
@@ -93,7 +94,7 @@ public class SalesDashboardController : ControllerBase
     [HttpGet("today-orders")]
     public async Task<ActionResult<List<OrderDetailDto>>> GetTodayOrders([FromQuery] int branchId, [FromQuery] int take = 20, [FromQuery] DateTime? date = null, [FromQuery] int days = 30)
     {
-        var targetDate = date ?? DateTime.Now.Date;  // Use current system time
+        var targetDate = date ?? TimeZoneHelper.GetVietnamNow().Date;  // Use current system time
         var startOfDay = targetDate.Date.AddDays(-days); // Default to last 30 days
         var endOfDay = targetDate.Date.AddDays(1);
 
@@ -123,7 +124,7 @@ public class SalesDashboardController : ControllerBase
     [HttpGet("product-sales")]
     public async Task<ActionResult<List<ProductSalesDto>>> GetProductSales([FromQuery] int branchId, [FromQuery] DateTime? date = null)
     {
-        var targetDate = date ?? DateTime.Today;
+        var targetDate = date ?? TimeZoneHelper.GetVietnamToday();
         var startOfDay = targetDate.Date;
         var endOfDay = startOfDay.AddDays(1);
 

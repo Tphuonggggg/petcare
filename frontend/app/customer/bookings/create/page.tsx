@@ -57,12 +57,16 @@ export default function BookingCreatePage() {
       const user = JSON.parse(userData)
       // Lấy tên dịch vụ từ id
       const service = services.find((s: any) => String(s.serviceId ?? s.id) === form.serviceId)
+      
+      // Send datetime-local value directly without conversion
+      // form.requestedDateTime is in format "2025-01-11T07:00"
+      
       await apiPost("/bookings", {
         CustomerId: user.customerId || user.id || user.CustomerId,
         PetId: Number(form.petId),
         BranchId: Number(form.branchId),
         DoctorId: form.doctorId && form.doctorId !== "auto" ? Number(form.doctorId) : null,
-        BookingType: service?.name || "Dịch vụ",
+        BookingType: service?.name || "D\u1ecbch v\u1ee5",
         RequestedDateTime: form.requestedDateTime,
         Status: "Pending",
         Notes: form.notes,

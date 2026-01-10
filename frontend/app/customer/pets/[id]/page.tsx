@@ -146,7 +146,7 @@ export default function PetDetailPage() {
   const formatDate = (dateString?: string) => {
     if (!dateString) return "---"
     try {
-      return new Date(dateString).toLocaleDateString("vi-VN")
+      return new Date(dateString).toLocaleDateString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' })
     } catch {
       return "---"
     }

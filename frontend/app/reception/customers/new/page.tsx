@@ -101,7 +101,7 @@ export default function NewCustomerPage() {
         Email: form.email || null,
         Gender: form.gender,
         BirthDate: form.birthDate,
-        MemberSince: new Date().toISOString().split("T")[0],
+        MemberSince: new Date().toLocaleDateString('en-CA'),
         MembershipTierId: parseInt(form.membershipTierId),
       })
 
@@ -111,7 +111,7 @@ export default function NewCustomerPage() {
           CustomerId: customerResponse.customerId,
           Name: form.petName,
           Species: form.petSpecies || "Unknown",
-          BirthDate: new Date().toISOString(),
+          BirthDate: new Date().toLocaleDateString('en-CA'),
         })
       }
 

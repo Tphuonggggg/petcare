@@ -189,7 +189,7 @@ export default function CustomerDetailPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Thành viên từ</p>
                 <p className="text-lg font-bold mt-1">
-                  {customer.memberSince ? new Date(customer.memberSince).toLocaleDateString("vi-VN") : "N/A"}
+                  {customer.memberSince ? new Date(customer.memberSince).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "N/A"}
                 </p>
               </div>
             </div>
@@ -215,7 +215,7 @@ export default function CustomerDetailPage() {
                       <p className="text-sm text-muted-foreground">{pet.species} {pet.breed ? `- ${pet.breed}` : ""}</p>
                       {pet.birthDate && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Sinh: {new Date(pet.birthDate).toLocaleDateString("vi-VN")}
+                          Sinh: {new Date(pet.birthDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
                         </p>
                       )}
                     </div>
@@ -267,6 +267,7 @@ export default function CustomerDetailPage() {
                           {new Date(booking.bookingTime).toLocaleTimeString("vi-VN", {
                             hour: "2-digit",
                             minute: "2-digit",
+                            timeZone: "Asia/Ho_Chi_Minh"
                           })}
                         </span>
                         <span className="flex items-center gap-1">

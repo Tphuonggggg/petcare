@@ -98,7 +98,7 @@ export default function BookingsPage() {
             id: b.bookingId,
             bookingId: b.bookingId,
             date: b.requestedDateTime ? new Date(b.requestedDateTime).toISOString().split('T')[0] : '',
-            time: b.requestedDateTime ? new Date(b.requestedDateTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '',
+            time: b.requestedDateTime ? new Date(b.requestedDateTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : '',
             customer: b.customerName || '',
             pet: b.petName || '',
             service: b.serviceType || 'Dịch vụ',

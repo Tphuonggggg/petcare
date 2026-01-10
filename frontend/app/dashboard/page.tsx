@@ -119,7 +119,7 @@ export default function DashboardPage() {
             <div className="space-y-3">
               {bookings.map((appointment) => {
                 const bookingTime = new Date(appointment.bookingTime)
-                const time = bookingTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                const time = bookingTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })
                 return (
                   <div key={appointment.bookingId} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
                     <div className="font-semibold text-primary min-w-[60px]">{time}</div>
@@ -145,7 +145,7 @@ export default function DashboardPage() {
             <div className="space-y-3">
               {recentCustomers.map((customer) => {
                 const joinDate = new Date(customer.memberSince || new Date())
-                const dateStr = joinDate.toLocaleDateString('vi-VN')
+                const dateStr = joinDate.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
                 return (
                   <div key={customer.customerId} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
                     <div className="flex-1">

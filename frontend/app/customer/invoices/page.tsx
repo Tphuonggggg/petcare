@@ -128,7 +128,7 @@ export default function InvoicesPage() {
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
                         {invoice.invoiceDate
-                          ? new Date(invoice.invoiceDate).toLocaleDateString('vi-VN')
+                          ? new Date(invoice.invoiceDate).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
                           : '---'}
                       </div>
                       {invoice.items && invoice.items.length > 0 && (

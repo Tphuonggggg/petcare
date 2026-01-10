@@ -75,9 +75,9 @@ export default function DoctorSchedulesPage() {
         setLoading(true)
         setError("")
         
-        // Convert date to ISO format (YYYY-MM-DD)
-        const dateObj = new Date(selectedDate)
-        const isoDate = dateObj.toISOString().split("T")[0]
+        // Keep date as-is without timezone conversion
+        // selectedDate is already in YYYY-MM-DD format from input
+        const isoDate = selectedDate
         
         console.log("Fetching schedule for:", {
           doctorId: selectedDoctor,
@@ -145,6 +145,7 @@ export default function DoctorSchedulesPage() {
       return new Date(dateTimeStr).toLocaleTimeString("vi-VN", {
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: "Asia/Ho_Chi_Minh"
       })
     } catch {
       return dateTimeStr
@@ -274,7 +275,7 @@ export default function DoctorSchedulesPage() {
                   <p className="text-sm text-muted-foreground mt-2">
                     {doctors.find((d) => d.employeeId === selectedDoctor)?.fullName}
                     {" - "}
-                    {new Date(selectedDate).toLocaleDateString("vi-VN")}
+                    {new Date(selectedDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
                   </p>
                 )}
               </CardHeader>

@@ -173,7 +173,7 @@ export default function CustomerDashboard() {
                         <p className="font-medium">{booking.title ?? booking.serviceName ?? booking.bookingType ?? 'Lịch hẹn'}</p>
                         <p className="text-sm text-muted-foreground">{booking.petName ?? booking.pet?.name ?? ''} {booking.pet?.species ?? ''} {booking.pet?.breed ?? ''}</p>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Ngày đặt: {booking.requestedDateTime ? new Date(booking.requestedDateTime).toLocaleString() : (booking.date ? new Date(booking.date).toLocaleString() : '')}
+                          Ngày đặt: {booking.requestedDateTime ? new Date(booking.requestedDateTime).toLocaleString('vi-VN') : (booking.date ? new Date(booking.date).toLocaleString('vi-VN') : '')}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">Loại lịch: {booking.bookingType ?? '-'}</p>
                       </div>

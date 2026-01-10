@@ -59,7 +59,7 @@ export default function VaccinationPage() {
   // Form fields
   const [selectedVaccine, setSelectedVaccine] = useState<string>("")
   const [dose, setDose] = useState<string>("")
-  const [administeredDate, setAdministeredDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [administeredDate, setAdministeredDate] = useState<string>(new Date().toLocaleDateString('en-CA'))
   const [nextDueDate, setNextDueDate] = useState<string>("")
   const [records, setRecords] = useState<Array<{
     vaccineId: number
@@ -165,7 +165,7 @@ export default function VaccinationPage() {
     // Reset form
     setSelectedVaccine("")
     setDose("")
-    setAdministeredDate(new Date().toISOString().split('T')[0])
+    setAdministeredDate(new Date().toLocaleDateString('en-CA'))
     setNextDueDate("")
   }
 

@@ -299,7 +299,7 @@ export default function OrdersPage() {
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg">Đơn #{booking.invoiceId}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {booking.customerName} - {new Date(booking.invoiceDate).toLocaleDateString('vi-VN')}
+                      {booking.customerName} - {new Date(booking.invoiceDate).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Chi nhánh: {booking.branchName}
@@ -416,7 +416,7 @@ export default function OrdersPage() {
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Ngày lập hóa đơn</label>
                   <p className="text-sm font-medium mt-1">
-                    {new Date(selectedBooking.invoiceDate).toLocaleDateString('vi-VN')}
+                    {new Date(selectedBooking.invoiceDate).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
                   </p>
                 </div>
               </div>

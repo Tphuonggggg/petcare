@@ -52,7 +52,7 @@ export default function CheckInPage() {
       await apiPost(`/CheckHealths`, {
         petId: petId,
         doctorId: doctorId,
-        checkDate: new Date().toISOString().split('T')[0],
+        checkDate: new Date().toLocaleDateString('en-CA'),
         symptoms: '',
       })
       

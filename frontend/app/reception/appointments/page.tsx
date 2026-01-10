@@ -127,8 +127,8 @@ export default function ReceptionAppointmentsPage() {
     try {
       const date = new Date(dateTime)
       return {
-        date: date.toLocaleDateString("vi-VN"),
-        time: date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        date: date.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
+        time: date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" }),
       }
     } catch {
       return { date: "", time: "" }

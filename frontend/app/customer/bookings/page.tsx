@@ -162,7 +162,7 @@ export default function CustomerBookingsPage() {
                         <div className="flex items-center gap-2 text-sm">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
                           <span>
-                            {(booking.requestedDateTime ? new Date(booking.requestedDateTime).toLocaleString() : (booking.date ? new Date(booking.date).toLocaleString() : '-'))}
+                            {(booking.requestedDateTime ? new Date(booking.requestedDateTime).toLocaleString('vi-VN') : (booking.date ? new Date(booking.date).toLocaleString('vi-VN') : '-'))}
                           </span>
                         </div>
                         <div className="text-sm">
@@ -226,7 +226,7 @@ export default function CustomerBookingsPage() {
                         <div className="flex items-center gap-2 text-sm">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
                           <span>
-                            {(booking.requestedDateTime ? new Date(booking.requestedDateTime).toLocaleString() : (booking.date ? new Date(booking.date).toLocaleString() : '-'))}
+                            {(booking.requestedDateTime ? new Date(booking.requestedDateTime).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : (booking.date ? new Date(booking.date).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '-'))}
                           </span>
                         </div>
                         <div className="text-sm">

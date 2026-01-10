@@ -226,7 +226,7 @@ export default function StaffOrdersPage() {
                 <div className="flex justify-between items-end pt-3 border-t">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Calendar className="h-4 w-4" />
-                    {new Date(order.invoiceDate).toLocaleDateString('vi-VN')}
+                    {new Date(order.invoiceDate).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
                   </div>
                   {order.notes && (
                     <div className="text-sm text-muted-foreground italic max-w-xs truncate">
