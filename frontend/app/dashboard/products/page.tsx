@@ -553,16 +553,6 @@ export default function ProductsPage() {
               >
                 Chỉnh sửa
               </Button>
-              <Button
-                variant="destructive"
-                className="flex-1"
-                onClick={() => {
-                  handleDeleteProduct(selectedProduct.productId)
-                  setIsDetailDialogOpen(false)
-                }}
-              >
-                Xóa
-              </Button>
             </div>
 
             <Button

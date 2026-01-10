@@ -89,13 +89,13 @@ export default function NewPetPage() {
       setLoading(true)
       
       const payload = {
-        customerId: parseInt(formData.customerId),
-        name: formData.name,
-        species: formData.species,
-        breed: formData.breed || null,
-        birthDate: formData.birthDate || null,
-        gender: formData.gender || null,
-        status: formData.status || "Khỏe mạnh"
+        CustomerId: parseInt(formData.customerId),
+        Name: formData.name,
+        Species: formData.species,
+        Breed: formData.breed || null,
+        BirthDate: formData.birthDate || null,
+        Gender: formData.gender || null,
+        Status: formData.status || "Khỏe mạnh"
       }
 
       await apiPost("/pets", payload)

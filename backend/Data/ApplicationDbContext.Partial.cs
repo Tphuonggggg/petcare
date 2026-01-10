@@ -10,6 +10,32 @@ public partial class ApplicationDbContext
 {
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
     {
+        // Configure Employee cascade delete
+        modelBuilder.Entity<Employee>()
+            .HasMany(e => e.CheckHealths)
+            .WithOne(ch => ch.Employee)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Employee>()
+            .HasMany(e => e.EmployeeHistories)
+            .WithOne(eh => eh.Employee)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Employee>()
+            .HasMany(e => e.Invoices)
+            .WithOne(i => i.Employee)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Employee>()
+            .HasMany(e => e.Reviews)
+            .WithOne(r => r.Employee)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Employee>()
+            .HasMany(e => e.VaccineRecords)
+            .WithOne(vr => vr.Employee)
+            .OnDelete(DeleteBehavior.Cascade);
+
         // Configure Invoice table to work with database triggers
         modelBuilder.Entity<Invoice>(entity =>
         {

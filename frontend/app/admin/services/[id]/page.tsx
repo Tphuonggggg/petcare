@@ -25,9 +25,9 @@ export default function AdminServiceDetail() {
         const { apiGet } = await import('@/lib/api')
         const data = await apiGet('/services/' + id)
         setService(data)
-        setName(data?.name || '')
-        setPrice(data?.price ? String(data.price) : '')
-        setDescription(data?.description || '')
+        setName(data?.Name || '')
+        setPrice(data?.BasePrice ? String(data.BasePrice) : '')
+        setDescription(data?.Description || '')
       } catch (err) {
         console.error(err)
       }
@@ -39,11 +39,20 @@ export default function AdminServiceDetail() {
     if (!id) return
     try {
       const { apiPut } = await import('@/lib/api')
-      await apiPut('/services/' + id, { name, price: price ? Number(price) : undefined, description })
+      const serviceId = typeof id === 'string' ? parseInt(id) : id
+      const payload = {
+        ServiceId: serviceId,
+        Name: name,
+        BasePrice: price ? Number(price) : null,
+        Description: description
+      }
+      console.log('Sending payload:', payload)
+      await apiPut(`/services/${serviceId}`, payload)
       alert('Đã lưu')
       router.push('/admin/services')
-    } catch {
-      alert('Lưu thất bại')
+    } catch (err: any) {
+      console.error('Save error:', err)
+      alert('Lưu thất bại: ' + (err?.message || 'Vui lòng thử lại'))
     }
   }
 
@@ -54,8 +63,8 @@ export default function AdminServiceDetail() {
       await apiDelete('/services/' + id)
       alert('Đã xóa')
       router.push('/admin/services')
-    } catch {
-      alert('Xóa thất bại')
+    } catch (err: any) {
+      alert('Xóa thất bại: ' + (err?.message || 'Vui lòng thử lại'))
     }
   }
 

@@ -17,6 +17,7 @@ export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
   const [customers, setCustomers] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -69,6 +70,11 @@ export default function CustomersPage() {
       default:
         return "bg-blue-100 text-blue-700"
     }
+  }
+
+  const handleViewDetails = (customer: any) => {
+    setSelectedCustomer(customer)
+    setIsDialogOpen(true)
   }
 
   const totalPages = Math.ceil(totalCount / pageSize)
@@ -145,7 +151,11 @@ export default function CustomersPage() {
 
               <div className="pt-4 border-t flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">{pets} thú cưng</span>
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleViewDetails(customer)}
+                >
                   Xem chi tiết
                 </Button>
               </div>
@@ -191,7 +201,11 @@ export default function CustomersPage() {
         </div>
       )}
 
-      <CustomerDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
+      <CustomerDialog 
+        open={isDialogOpen} 
+        onOpenChange={setIsDialogOpen}
+        customer={selectedCustomer}
+      />
     </div>
   )
 

@@ -123,21 +123,21 @@ export default function CreateOrderPage() {
       const totalAmount = calculateTotal()
 
       const orderData = {
-        customerId: selectedCustomer.customerId,
-        branchId: branchId,
-        employeeId: parseInt(localStorage.getItem('employeeId') || '1'),
-        invoiceDate: new Date().toISOString(),
-        totalAmount: totalAmount,
-        discountAmount: 0,
-        finalAmount: totalAmount,
-        paymentMethod: paymentMethod,
-        status: "Pending", // New orders start as Pending (not yet paid)
-        items: orderItems.map(item => ({
-          productId: item.productId,
-          itemType: "PRODUCT",
-          quantity: item.quantity,
-          unitPrice: item.price,
-          totalPrice: item.total
+        CustomerId: selectedCustomer.customerId,
+        BranchId: branchId,
+        EmployeeId: parseInt(localStorage.getItem('employeeId') || '1'),
+        InvoiceDate: new Date().toISOString(),
+        TotalAmount: totalAmount,
+        DiscountAmount: 0,
+        FinalAmount: totalAmount,
+        PaymentMethod: paymentMethod,
+        Status: "Pending", // New orders start as Pending (not yet paid)
+        Items: orderItems.map(item => ({
+          ProductId: item.productId,
+          ItemType: "PRODUCT",
+          Quantity: item.quantity,
+          UnitPrice: item.price,
+          TotalPrice: item.total
         }))
       }
 

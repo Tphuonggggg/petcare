@@ -132,7 +132,7 @@ export default function SalesOrderDetailPage() {
     if (!order) return
     try {
       setCancelling(true)
-      await apiPut(`/invoices/${order.invoiceId}/status`, { status: "cancelled" })
+      await apiPut(`/invoices/${order.invoiceId}/status`, { status: "Cancelled" })
       
       // Reload order to get updated status
       await loadOrder()

@@ -96,22 +96,22 @@ export default function NewCustomerPage() {
 
       // Create customer
       const customerResponse = await apiPost("/customers", {
-        fullName: form.fullName,
-        phone: form.phone,
-        email: form.email || null,
-        gender: form.gender,
-        birthDate: form.birthDate,
-        memberSince: new Date().toISOString().split("T")[0],
-        membershipTierId: parseInt(form.membershipTierId),
+        FullName: form.fullName,
+        Phone: form.phone,
+        Email: form.email || null,
+        Gender: form.gender,
+        BirthDate: form.birthDate,
+        MemberSince: new Date().toISOString().split("T")[0],
+        MembershipTierId: parseInt(form.membershipTierId),
       })
 
       // If pet info is provided, create pet
       if (form.petName && customerResponse.customerId) {
         await apiPost("/pets", {
-          customerId: customerResponse.customerId,
-          name: form.petName,
-          species: form.petSpecies || "Unknown",
-          dateOfBirth: new Date().toISOString(),
+          CustomerId: customerResponse.customerId,
+          Name: form.petName,
+          Species: form.petSpecies || "Unknown",
+          BirthDate: new Date().toISOString(),
         })
       }
 

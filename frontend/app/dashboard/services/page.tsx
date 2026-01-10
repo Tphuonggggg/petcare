@@ -111,10 +111,10 @@ export default function ServicesPage() {
   const openEditDialog = (service: any) => {
     setSelectedService(service)
     setFormData({
-      name: service.name || '',
-      basePrice: service.basePrice || '',
-      serviceType: service.serviceType || '',
-      description: service.description || ''
+      name: service.Name || service.name || '',
+      basePrice: service.BasePrice || service.basePrice || '',
+      serviceType: service.ServiceType || service.serviceType || '',
+      description: service.Description || service.description || ''
     })
     setIsDialogOpen(true)
   }
@@ -155,15 +155,16 @@ export default function ServicesPage() {
       const token = localStorage.getItem('token')
       
       const payload = {
-        name: formData.name,
-        basePrice: price,
-        serviceType: formData.serviceType,
-        description: formData.description
+        ServiceId: selectedService?.ServiceId || selectedService?.serviceId,
+        Name: formData.name,
+        BasePrice: price,
+        ServiceType: formData.serviceType,
+        Description: formData.description
       }
 
       if (selectedService) {
         // Edit
-        const response = await fetch(`http://localhost:5000/api/services/${selectedService.serviceId}`, {
+        const response = await fetch(`http://localhost:5000/api/services/${selectedService.serviceId || selectedService.ServiceId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',

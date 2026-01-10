@@ -1,13 +1,17 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { useToast } from "@/hooks/use-toast"
 
 export default function AdminServicesPage() {
+  const router = useRouter()
+  const { toast } = useToast()
   const [services, setServices] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [name, setName] = useState('')
@@ -22,24 +26,67 @@ export default function AdminServicesPage() {
       if (Array.isArray(data)) setServices(data)
     } catch (err) {
       console.error(err)
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải danh sách dịch vụ",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
   const create = async () => {
-    if (!name) return alert('Nhập tên dịch vụ')
+    if (!name) {
+      toast({
+        title: "Lỗi",
+        description: "Nhập tên dịch vụ",
+        variant: "destructive",
+      })
+      return
+    }
     try {
       const { apiPost } = await import('@/lib/api')
-      await apiPost('/services', { name, price: price ? Number(price) : undefined, description })
+      await apiPost('/services', { Name: name, BasePrice: price ? Number(price) : undefined, Description: description })
       setName('')
       setPrice('')
       setDescription('')
       await load()
-      alert('Đã tạo dịch vụ')
-    } catch (err) {
-      alert('Tạo thất bại')
+      toast({
+        title: "Thành công",
+        description: "Đã tạo dịch vụ",
+      })
+    } catch (err: any) {
+      toast({
+        title: "Lỗi",
+        description: err?.message || "Tạo thất bại",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleEdit = (serviceId: number) => {
+    router.push(`/admin/services/${serviceId}`)
+  }
+
+  const handleDelete = async (serviceId: number) => {
+    if (!confirm('Xóa dịch vụ này?')) return
+    try {
+      const { apiDelete } = await import('@/lib/api')
+      await apiDelete(`/services/${serviceId}`)
+      await load()
+      toast({
+        title: "Thành công",
+        description: "Đã xóa dịch vụ",
+      })
+    } catch (err: any) {
+      toast({
+        title: "Lỗi",
+        description: err?.message || "Xóa thất bại",
+        variant: "destructive",
+      })
     }
   }
 
@@ -83,13 +130,25 @@ export default function AdminServicesPage() {
           {loading ? <div>Đang tải...</div> : (
             <div className="space-y-3">
               {services.length === 0 ? <div className="text-muted-foreground">Không có dịch vụ.</div> : services.map(s => (
-                <div key={s.serviceId ?? s.id} className="p-3 border rounded-lg flex justify-between items-center">
+                <div key={s.ServiceId ?? s.serviceId ?? s.id} className="p-3 border rounded-lg flex justify-between items-center">
                   <div>
-                    <div className="font-medium">{s.name}</div>
-                    <div className="text-sm text-muted-foreground">Giá: {s.price ?? '—'}</div>
+                    <div className="font-medium">{s.Name ?? s.name}</div>
+                    <div className="text-sm text-muted-foreground">Giá: {s.BasePrice ?? s.price ?? s.basePrice ?? '—'}</div>
                   </div>
                   <div className="flex gap-2">
-                    <Link href={`/admin/services/${s.serviceId ?? s.id}`} className="btn btn-sm">Sửa</Link>
+                    <Button 
+                      size="sm"
+                      onClick={() => handleEdit(s.ServiceId ?? s.serviceId ?? s.id)}
+                    >
+                      Chỉnh sửa
+                    </Button>
+                    <Button 
+                      variant="destructive" 
+                      size="sm"
+                      onClick={() => handleDelete(s.ServiceId ?? s.serviceId ?? s.id)}
+                    >
+                      Xóa
+                    </Button>
                   </div>
                 </div>
               ))}

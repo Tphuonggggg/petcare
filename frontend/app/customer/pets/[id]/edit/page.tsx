@@ -134,13 +134,13 @@ export default function EditPetPage() {
       setSubmitting(true)
 
       const petData = {
-        petId: pet.petId || pet.id,
-        customerId: pet.customerId,
-        name: values.name,
-        species: values.species,
-        breed: values.breed || null,
-        birthDate: values.birthDate ? new Date(values.birthDate).toISOString() : null,
-        gender: values.gender || null,
+        PetId: pet.petId || pet.id,
+        CustomerId: pet.customerId,
+        Name: values.name,
+        Species: values.species,
+        Breed: values.breed || null,
+        BirthDate: values.birthDate ? new Date(values.birthDate).toISOString() : null,
+        Gender: values.gender || null,
       }
 
       await apiPut(`/pets/${pet.petId || pet.id}`, petData)

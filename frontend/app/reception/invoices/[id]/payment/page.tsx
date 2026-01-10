@@ -91,9 +91,9 @@ export default function InvoicePaymentPage() {
     try {
       setProcessing(true)
       const updateData = {
-        status: "Paid",
-        paymentMethod: paymentMethod,
-        notes: notes || undefined,
+        Status: "Paid",
+        PaymentMethod: paymentMethod,
+        Notes: notes || undefined,
       }
 
       await apiPut(`/invoices/${invoiceId}`, updateData)

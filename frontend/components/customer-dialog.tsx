@@ -13,9 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface CustomerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  customer?: any
 }
 
-export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
+export function CustomerDialog({ open, onOpenChange, customer }: CustomerDialogProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [tiers, setTiers] = useState<Array<{ membershipTierId: number; name: string }>>([])
@@ -42,7 +43,9 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
             tiersList = data.map((t: any) => ({ membershipTierId: t.membershipTierId || t.id, name: t.name }))
           }
           setTiers(tiersList)
-          if (tiersList.length > 0) setFormData(s => ({ ...s, membershipTierId: tiersList[0].membershipTierId }))
+          if (!customer && tiersList.length > 0) {
+            setFormData(s => ({ ...s, membershipTierId: tiersList[0].membershipTierId }))
+          }
         }
       } catch (error) {
         console.error('Failed to load tiers:', error)
@@ -50,6 +53,31 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
     })()
     return () => { mounted = false }
   }, [])
+
+  // Load customer details when dialog opens with customer
+  useEffect(() => {
+    if (open && customer) {
+      setFormData({
+        name: customer.name || customer.fullName || "",
+        email: customer.email || "",
+        phone: customer.phone || customer.phoneNumber || "",
+        address: customer.address || "",
+        membershipTierId: customer.membershipTierId || 0,
+        gender: customer.gender || "M",
+      })
+    } else if (open && !customer) {
+      // Reset form for creating new customer
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        address: "",
+        membershipTierId: tiers.length > 0 ? tiers[0].membershipTierId : 0,
+        gender: "M",
+      })
+    }
+    setError(null)
+  }, [open, customer, tiers])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -109,8 +137,12 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Thêm khách hàng mới</DialogTitle>
-          <DialogDescription>Nhập thông tin khách hàng vào form bên dưới</DialogDescription>
+          <DialogTitle>
+            {customer ? "Chi tiết khách hàng" : "Thêm khách hàng mới"}
+          </DialogTitle>
+          <DialogDescription>
+            {customer ? "Xem thông tin khách hàng" : "Nhập thông tin khách hàng vào form bên dưới"}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -124,6 +156,7 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              disabled={!!customer}
               required
             />
           </div>
@@ -134,6 +167,7 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              disabled={!!customer}
               required
             />
           </div>
@@ -143,6 +177,7 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
               id="phone"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              disabled={!!customer}
               required
             />
           </div>
@@ -152,6 +187,7 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
               id="address"
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              disabled={!!customer}
             />
           </div>
           <div className="space-y-2">
@@ -159,6 +195,7 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
             <Select
               value={formData.gender}
               onValueChange={(value) => setFormData({ ...formData, gender: value })}
+              disabled={!!customer}
             >
               <SelectTrigger id="gender">
                 <SelectValue />
@@ -175,6 +212,7 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
             <Select
               value={String(formData.membershipTierId)}
               onValueChange={(value) => setFormData({ ...formData, membershipTierId: parseInt(value, 10) })}
+              disabled={!!customer}
             >
               <SelectTrigger id="tier">
                 <SelectValue />
@@ -196,17 +234,18 @@ export function CustomerDialog({ open, onOpenChange }: CustomerDialogProps) {
               variant="outline" 
               onClick={() => onOpenChange(false)} 
               className="flex-1"
-              disabled={loading}
             >
-              Hủy
+              Đóng
             </Button>
-            <Button 
-              type="submit" 
-              className="flex-1"
-              disabled={loading}
-            >
-              {loading ? 'Đang lưu...' : 'Lưu'}
-            </Button>
+            {!customer && (
+              <Button 
+                type="submit" 
+                className="flex-1"
+                disabled={loading}
+              >
+                {loading ? 'Đang lưu...' : 'Lưu'}
+              </Button>
+            )}
           </div>
         </form>
       </DialogContent>

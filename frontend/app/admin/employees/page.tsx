@@ -263,7 +263,6 @@ export default function AdminEmployeesPage() {
                         </div>
                         <div className="flex items-center gap-3">
                           <Button variant="outline" size="sm" onClick={() => openDetail(Number(id))}>Xem / Sửa</Button>
-                          <Button variant="destructive" size="sm" onClick={() => handleDelete(Number(id))}>Xóa</Button>
                         </div>
                       </div>
                     )
@@ -396,9 +395,6 @@ export default function AdminEmployeesPage() {
                 <div className="flex gap-2 pt-4 border-t">
                   <Button type="submit" className="flex-1" disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu'}</Button>
                   <Button type="button" variant="outline" onClick={() => { setPanelOpen(false); setSelected(null); setEditGender('Male'); setEditPositionId(positions[0]?.positionId || positions[0]?.id || null) }}>Hủy</Button>
-                  {(selected && (selected.id || selected.employeeId)) ? (
-                    <Button type="button" variant="destructive" onClick={() => handleDelete(Number(selected.id ?? selected.employeeId))}>Xóa</Button>
-                  ) : null}
                 </div>
               </form>
             ) : (

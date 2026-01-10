@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Search, Plus } from "lucide-react"
-import DashboardBranchGate from '@/components/dashboard-branch-gate'
 
 const mockPets = [
   {
@@ -48,28 +47,24 @@ export default function PetsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [pets, setPets] = useState<any[]>(mockPets)
   const [loading, setLoading] = useState(false)
-  const [branchId, setBranchId] = useState<number | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(9)
+  const [totalCount, setTotalCount] = useState(0)
 
   useEffect(() => {
-    try {
-      const id = localStorage.getItem('selected_branch_id')
-      if (id) setBranchId(Number(id))
-    } catch {}
-  }, [])
-
-  useEffect(() => {
-    if (!branchId) return
-    
     let mounted = true
     async function load() {
       setLoading(true)
       try {
         const { apiGet } = await import('@/lib/api')
-        // Fetch pets that have bookings/records in the selected branch
-        const data = await apiGet(`/pets?branchId=${branchId}`)
+        // Fetch pets with pagination and search
+        const query = searchTerm ? `?search=${encodeURIComponent(searchTerm)}&page=${currentPage}&pageSize=${pageSize}` : `?page=${currentPage}&pageSize=${pageSize}`
+        const data = await apiGet(`/pets${query}`)
         if (mounted) {
           const items = Array.isArray(data) ? data : (data?.items || [])
+          const total = data?.totalCount || items.length
           setPets(items)
+          setTotalCount(total)
         }
       } catch (e) {
         // keep mockPets on error
@@ -79,7 +74,7 @@ export default function PetsPage() {
     }
     load()
     return () => { mounted = false }
-  }, [branchId])
+  }, [currentPage, pageSize, searchTerm])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -95,7 +90,6 @@ export default function PetsPage() {
   }
 
   return (
-    <DashboardBranchGate>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -114,9 +108,29 @@ export default function PetsPage() {
           <Input
             placeholder="Tìm kiếm theo tên, loài, chủ nhân..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setCurrentPage(1)
+            }}
             className="pl-9"
           />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Hiển thị:</span>
+          <select 
+            value={pageSize} 
+            onChange={(e) => {
+              setPageSize(Number(e.target.value))
+              setCurrentPage(1)
+            }}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            <option value="6">6</option>
+            <option value="9">9</option>
+            <option value="12">12</option>
+            <option value="20">20</option>
+          </select>
+          <span className="text-sm text-muted-foreground">mỗi trang</span>
         </div>
       </div>
 
@@ -165,5 +179,55 @@ export default function PetsPage() {
             )
           })}
       </div>
-    </div>    </DashboardBranchGate>  )
+
+      {/* Pagination */}
+      {totalCount > 0 && (
+        <div className="flex items-center justify-between border-t pt-4">
+          <div className="text-sm text-muted-foreground">
+            Hiển thị <strong>{(currentPage - 1) * pageSize + 1}</strong> đến <strong>{Math.min(currentPage * pageSize, totalCount)}</strong> trong <strong>{totalCount}</strong> thú cưng
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            >
+              Trang trước
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.ceil(totalCount / pageSize) }, (_, i) => i + 1)
+                .filter(page => {
+                  const maxPages = Math.ceil(totalCount / pageSize)
+                  if (maxPages <= 5) return true
+                  return (
+                    page === 1 ||
+                    page === maxPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  )
+                })
+                .map((page, idx, arr) => (
+                  <div key={page}>
+                    {idx > 0 && arr[idx - 1] !== page - 1 && <span className="px-1">...</span>}
+                    <Button
+                      variant={page === currentPage ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </Button>
+                  </div>
+                ))}
+            </div>
+            <Button 
+              variant="outline"
+              disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+              onClick={() => setCurrentPage(prev => prev + 1)}
+            >
+              Trang sau
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
