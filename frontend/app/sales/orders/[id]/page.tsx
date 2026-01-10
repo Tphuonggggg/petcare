@@ -47,7 +47,6 @@ export default function SalesOrderDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
-  const [completing, setCompleting] = useState(false)
   const [cancelling, setCancelling] = useState(false)
 
   useEffect(() => {
@@ -80,16 +79,15 @@ export default function SalesOrderDetailPage() {
     if (!order) return
     try {
       setConfirming(true)
-      // If Pending, move to Processing. If Processing, move to Paid
-      const nextStatus = order.status === "Pending" ? "Processing" : "Paid"
-      await apiPut(`/invoices/${order.invoiceId}/status`, { status: nextStatus })
+      // Directly change from Pending to Paid
+      await apiPut(`/invoices/${order.invoiceId}/status`, { status: "Paid" })
       
       // Reload order to get updated status
       await loadOrder()
       
       toast({
         title: "Thành công",
-        description: "Đơn hàng đã được xác nhận"
+        description: "Đơn hàng đã được xác nhận và thanh toán"
       })
     } catch (err) {
       console.error("Error confirming order:", err)
@@ -100,31 +98,6 @@ export default function SalesOrderDetailPage() {
       })
     } finally {
       setConfirming(false)
-    }
-  }
-
-  const handleCompleteOrder = async () => {
-    if (!order) return
-    try {
-      setCompleting(true)
-      await apiPut(`/invoices/${order.invoiceId}/status`, { status: "Paid" })
-      
-      // Reload order to get updated status
-      await loadOrder()
-      
-      toast({
-        title: "Thành công",
-        description: "Đơn hàng đã thanh toán và hoàn thành"
-      })
-    } catch (err) {
-      console.error("Error completing order:", err)
-      toast({
-        title: "Lỗi",
-        description: "Không thể thanh toán đơn hàng",
-        variant: "destructive"
-      })
-    } finally {
-      setCompleting(false)
     }
   }
 
@@ -350,7 +323,7 @@ export default function SalesOrderDetailPage() {
                 </div>
 
                 <div className="pt-4 space-y-2">
-                  {order.status?.toLowerCase() === 'pending' && (
+                  {(order.status === 'Pending' || order.status === 'pending') && (
                     <>
                       <Button 
                         onClick={handleConfirmOrder}
@@ -358,33 +331,17 @@ export default function SalesOrderDetailPage() {
                         className="w-full bg-blue-600 hover:bg-blue-700"
                       >
                         <Check className="h-4 w-4 mr-2" />
-                        {confirming ? "Đang xác nhận..." : "✓ Xác nhận đơn"}
+                        {confirming ? "Đang xác nhận..." : "✓ Xác nhận & Thanh toán"}
                       </Button>
-                    </>
-                  )}
-
-                  {order.status?.toLowerCase() === 'processing' && (
-                    <>
                       <Button 
-                        onClick={handleCompleteOrder}
-                        disabled={completing}
-                        className="w-full bg-green-600 hover:bg-green-700"
+                        onClick={handleCancelOrder}
+                        disabled={cancelling}
+                        variant="destructive"
+                        className="w-full"
                       >
-                        <Check className="h-4 w-4 mr-2" />
-                        {completing ? "Đang thanh toán..." : "✓ Thanh toán"}
+                        {cancelling ? "Đang hủy..." : "✕ Hủy đơn hàng"}
                       </Button>
                     </>
-                  )}
-
-                  {(order.status?.toLowerCase() === 'pending' || order.status?.toLowerCase() === 'processing') && (
-                    <Button 
-                      onClick={handleCancelOrder}
-                      disabled={cancelling}
-                      variant="destructive"
-                      className="w-full"
-                    >
-                      {cancelling ? "Đang hủy..." : "✕ Hủy đơn hàng"}
-                    </Button>
                   )}
 
                   <div className="flex gap-2">

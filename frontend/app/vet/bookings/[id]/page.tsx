@@ -25,6 +25,7 @@ export default function BookingDetailPage() {
   const [booking, setBooking] = useState<any | null>(null)
   const [pet, setPet] = useState<any | null>(null)
   const [loading, setLoading] = useState(false)
+  const [existingCheckHealth, setExistingCheckHealth] = useState<any | null>(null)
   
   // Health check fields
   const [symptoms, setSymptoms] = useState('')
@@ -45,6 +46,29 @@ export default function BookingDetailPage() {
             try {
               const p = await apiGet('/pets/' + b.petId)
               setPet(p)
+            } catch {}
+          }
+          
+          // Load existing check health for this booking
+          if (b?.bookingId) {
+            try {
+              const checks = await apiGet('/CheckHealths?petId=' + encodeURIComponent(String(b.petId)))
+              if (Array.isArray(checks) && checks.length > 0) {
+                // Find the check health record that matches this booking (by date or bookingId)
+                const matchingCheck = checks.find((ch: any) => {
+                  // If CheckHealth has bookingId field, match exactly
+                  // Otherwise, find the most recent one created after booking
+                  return ch.bookingId === b.bookingId || 
+                         (new Date(ch.checkDate) > new Date(b.requestedDateTime))
+                })
+                if (matchingCheck) {
+                  setExistingCheckHealth(matchingCheck)
+                  setSymptoms(matchingCheck.symptoms || '')
+                  setDiagnosis(matchingCheck.diagnosis || '')
+                  setPrescription(matchingCheck.prescription || '')
+                  setFollowUpDate(matchingCheck.followUpDate ? new Date(matchingCheck.followUpDate).toISOString().split('T')[0] : '')
+                }
+              }
             } catch {}
           }
         } catch {}
@@ -138,19 +162,21 @@ export default function BookingDetailPage() {
 
       // Call API to create check health record
       const checkHealthData = {
-        petId: pet.petId,
+        petId: pet?.petId,
         doctorId: parseInt(employeeId),
         symptoms: symptoms,
         diagnosis: diagnosis,
         prescription: prescriptionText,
         followUpDate: followUpDate ? new Date(followUpDate).toISOString() : null,
-        checkDate: new Date().toISOString(),
-        bookingId: booking.bookingId
+        bookingId: booking?.bookingId
       }
 
       console.log('[DEBUG] Saving check health:', checkHealthData)
+      console.log('[DEBUG] Pet:', pet)
+      console.log('[DEBUG] Booking:', booking)
       
-      await apiPost('/procedures/doctor/create-check-health', checkHealthData)
+      const response = await apiPost('/procedures/doctor/create-check-health', checkHealthData)
+      console.log('[DEBUG] API Response:', response)
       
       alert('Bệnh án đã được lưu thành công! Lịch hẹn đã chuyển sang hoàn thành.')
       router.push('/vet')
@@ -218,58 +244,95 @@ export default function BookingDetailPage() {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Khám bệnh</CardTitle>
+          {existingCheckHealth && (
+            <div className="text-sm text-green-600 mt-2">✓ Đã lưu bệnh án</div>
+          )}
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="symptoms">Triệu chứng *</Label>
-              <Textarea 
-                id="symptoms"
-                placeholder="Mô tả các triệu chứng quan sát được..."
-                value={symptoms} 
-                onChange={(e) => setSymptoms(e.target.value)}
-                rows={3}
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="diagnosis">Chẩn đoán *</Label>
-              <Textarea 
-                id="diagnosis"
-                placeholder="Chẩn đoán bệnh..."
-                value={diagnosis} 
-                onChange={(e) => setDiagnosis(e.target.value)}
-                rows={3}
-              />
-            </div>
+          {existingCheckHealth ? (
+            // View mode - display existing check health
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Triệu chứng</p>
+                <p className="font-medium">{existingCheckHealth.symptoms || '—'}</p>
+              </div>
+              
+              <div>
+                <p className="text-sm text-muted-foreground">Chẩn đoán</p>
+                <p className="font-medium">{existingCheckHealth.diagnosis || '—'}</p>
+              </div>
 
-            <div>
-              <Label htmlFor="followup">Ngày tái khám (tùy chọn)</Label>
-              <Input 
-                id="followup"
-                type="date"
-                value={followUpDate}
-                onChange={(e) => setFollowUpDate(e.target.value)}
-              />
+              {existingCheckHealth.followUpDate && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Ngày tái khám</p>
+                  <p className="font-medium">{new Date(existingCheckHealth.followUpDate).toLocaleDateString('vi-VN')}</p>
+                </div>
+              )}
+
+              <div>
+                <p className="text-sm text-muted-foreground">Đơn thuốc</p>
+                <p className="font-medium whitespace-pre-wrap">{existingCheckHealth.prescription || '—'}</p>
+              </div>
+
+              <div className="pt-4 border-t">
+                <p className="text-sm text-muted-foreground mb-2">Ngày khám</p>
+                <p className="font-medium">{new Date(existingCheckHealth.checkDate).toLocaleString('vi-VN')}</p>
+              </div>
             </div>
-          </div>
+          ) : (
+            // Edit mode - show form
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="symptoms">Triệu chứng *</Label>
+                <Textarea 
+                  id="symptoms"
+                  placeholder="Mô tả các triệu chứng quan sát được..."
+                  value={symptoms} 
+                  onChange={(e) => setSymptoms(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="diagnosis">Chẩn đoán *</Label>
+                <Textarea 
+                  id="diagnosis"
+                  placeholder="Chẩn đoán bệnh..."
+                  value={diagnosis} 
+                  onChange={(e) => setDiagnosis(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="followup">Ngày tái khám (tùy chọn)</Label>
+                <Input 
+                  id="followup"
+                  type="date"
+                  value={followUpDate}
+                  onChange={(e) => setFollowUpDate(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Pill className="h-5 w-5" />
-              Kê đơn thuốc
-            </span>
-            <Button size="sm" onClick={addPrescription}>
-              <Plus className="h-4 w-4 mr-1" />
-              Thêm thuốc
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      {!existingCheckHealth && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Pill className="h-5 w-5" />
+                Kê đơn thuốc
+              </span>
+              <Button size="sm" onClick={addPrescription}>
+                <Plus className="h-4 w-4 mr-1" />
+                Thêm thuốc
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
           {prescriptions.length === 0 ? (
             <div>
               <Label>Đơn thuốc (text)</Label>
@@ -350,13 +413,16 @@ export default function BookingDetailPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       <div className="flex gap-2">
-        <Button onClick={saveCheckHealth} size="lg">
-          Lưu bệnh án
-        </Button>
+        {!existingCheckHealth && (
+          <Button onClick={saveCheckHealth} size="lg">
+            Lưu bệnh án
+          </Button>
+        )}
         <Button variant="outline" size="lg" onClick={() => router.back()}>
-          Hủy
+          {existingCheckHealth ? 'Đóng' : 'Hủy'}
         </Button>
       </div>
     </div>

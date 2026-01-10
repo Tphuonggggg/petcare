@@ -494,12 +494,12 @@ public class StoredProcedureService : IStoredProcedureService
                 new SqlParameter("@BookingID", request.BookingId ?? (object)DBNull.Value),
             };
 
-            var results = await _context.Database.SqlQueryRaw<decimal>(
+            var results = await _context.Database.SqlQueryRaw<int>(
                 "EXEC usp_CheckHealth_Create @PetID, @DoctorID, @Symptoms, @Diagnosis, @Prescription, @FollowUpDate, @BookingID",
                 parameters
             ).ToListAsync();
 
-            var checkId = Convert.ToInt32(results.FirstOrDefault());
+            var checkId = results.FirstOrDefault();
             return new CreateCheckHealthResponseDto { NewCheckId = checkId };
         }
         catch (Exception ex)
