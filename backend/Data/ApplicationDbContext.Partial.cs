@@ -13,7 +13,7 @@ public partial class ApplicationDbContext
         // Configure Employee cascade delete
         modelBuilder.Entity<Employee>()
             .HasMany(e => e.CheckHealths)
-            .WithOne(ch => ch.Employee)
+            .WithOne(ch => ch.Doctor)
             .OnDelete(DeleteBehavior.Cascade);
             
         modelBuilder.Entity<Employee>()
@@ -33,7 +33,7 @@ public partial class ApplicationDbContext
             
         modelBuilder.Entity<Employee>()
             .HasMany(e => e.VaccineRecords)
-            .WithOne(vr => vr.Employee)
+            .WithOne(vr => vr.Doctor)
             .OnDelete(DeleteBehavior.Cascade);
 
         // Configure Invoice table to work with database triggers
