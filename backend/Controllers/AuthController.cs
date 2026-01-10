@@ -28,6 +28,26 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Health check endpoint
+    /// </summary>
+    [HttpGet("health")]
+    public ActionResult Health()
+    {
+        try
+        {
+            using (var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection")))
+            {
+                connection.Open();
+                return Ok(new { status = "ok", database = "connected" });
+            }
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { status = "error", message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Login with username and password
     /// Returns account info with PositionID for role-based routing
     /// </summary>

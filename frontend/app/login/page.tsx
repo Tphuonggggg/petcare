@@ -154,6 +154,14 @@ export default function LoginPage() {
           Quay lại trang chủ
         </Link>
 
+        <div className="flex gap-3 mb-8">
+          <Link href="/" className="flex-1">
+            <Button variant="outline" className="w-full">
+              ← Trang chủ
+            </Button>
+          </Link>
+        </div>
+
         <Card>
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">

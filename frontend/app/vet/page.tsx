@@ -248,19 +248,41 @@ export default function VetPage() {
                         </div>
                         
                         <div className="flex flex-col gap-2">
-                          <Button 
-                            size="sm" 
-                            onClick={() => router.push(`/vet/bookings/${booking.bookingId}`)}
-                          >
-                            Viết bệnh án
-                          </Button>
-                          <Button 
-                            size="sm"
-                            variant="outline"
-                            onClick={() => router.push(`/vet/bookings/${booking.bookingId}`)}
-                          >
-                            Xem chi tiết
-                          </Button>
+                          {booking.serviceType?.toLowerCase().includes('vaccination') || 
+                           booking.serviceType?.toLowerCase().includes('tiêm phòng') ? (
+                            <>
+                              <Button 
+                                size="sm" 
+                                onClick={() => router.push(`/vet/vaccination?bookingId=${booking.bookingId}`)}
+                                className="bg-blue-600 hover:bg-blue-700"
+                              >
+                                Tiêm phòng
+                              </Button>
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => router.push(`/vet/bookings/${booking.bookingId}`)}
+                              >
+                                Chi tiết
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button 
+                                size="sm" 
+                                onClick={() => router.push(`/vet/bookings/${booking.bookingId}`)}
+                              >
+                                Viết bệnh án
+                              </Button>
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => router.push(`/vet/bookings/${booking.bookingId}`)}
+                              >
+                                Chi tiết
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

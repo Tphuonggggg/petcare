@@ -26,6 +26,8 @@ export default function BookingDetailPage() {
   const [pet, setPet] = useState<any | null>(null)
   const [loading, setLoading] = useState(false)
   const [existingCheckHealth, setExistingCheckHealth] = useState<any | null>(null)
+  const [vaccineRecords, setVaccineRecords] = useState<any[]>([])
+  const [isVaccination, setIsVaccination] = useState(false)
   
   // Health check fields
   const [symptoms, setSymptoms] = useState('')
@@ -42,6 +44,12 @@ export default function BookingDetailPage() {
         try {
           const b = await apiGet('/bookings/' + id)
           setBooking(b)
+          
+          // Check if this is a vaccination booking
+          const isVacc = b?.bookingType?.toLowerCase().includes('tiêm phòng') || 
+                         b?.bookingType?.toLowerCase().includes('vaccination')
+          setIsVaccination(isVacc)
+          
           if (b?.petId) {
             try {
               const p = await apiGet('/pets/' + b.petId)
@@ -49,24 +57,29 @@ export default function BookingDetailPage() {
             } catch {}
           }
           
-          // Load existing check health for this booking
+          // Load existing records based on booking type
           if (b?.bookingId) {
             try {
-              const checks = await apiGet('/CheckHealths?petId=' + encodeURIComponent(String(b.petId)))
-              if (Array.isArray(checks) && checks.length > 0) {
-                // Find the check health record that matches this booking (by date or bookingId)
-                const matchingCheck = checks.find((ch: any) => {
-                  // If CheckHealth has bookingId field, match exactly
-                  // Otherwise, find the most recent one created after booking
-                  return ch.bookingId === b.bookingId || 
-                         (new Date(ch.checkDate) > new Date(b.requestedDateTime))
-                })
-                if (matchingCheck) {
-                  setExistingCheckHealth(matchingCheck)
-                  setSymptoms(matchingCheck.symptoms || '')
-                  setDiagnosis(matchingCheck.diagnosis || '')
-                  setPrescription(matchingCheck.prescription || '')
-                  setFollowUpDate(matchingCheck.followUpDate ? new Date(matchingCheck.followUpDate).toISOString().split('T')[0] : '')
+              if (isVacc) {
+                // Load vaccine records for this pet
+                const records = await apiGet('/vaccinerecords?petId=' + encodeURIComponent(String(b.petId)) + '&pageSize=100')
+                const vaccRecords = records?.items || (Array.isArray(records) ? records : [])
+                setVaccineRecords(vaccRecords)
+              } else {
+                // Load check health records for this pet
+                const checks = await apiGet('/CheckHealths?petId=' + encodeURIComponent(String(b.petId)))
+                if (Array.isArray(checks) && checks.length > 0) {
+                  const matchingCheck = checks.find((ch: any) => {
+                    return ch.bookingId === b.bookingId || 
+                           (new Date(ch.checkDate) > new Date(b.requestedDateTime))
+                  })
+                  if (matchingCheck) {
+                    setExistingCheckHealth(matchingCheck)
+                    setSymptoms(matchingCheck.symptoms || '')
+                    setDiagnosis(matchingCheck.diagnosis || '')
+                    setPrescription(matchingCheck.prescription || '')
+                    setFollowUpDate(matchingCheck.followUpDate ? new Date(matchingCheck.followUpDate).toISOString().split('T')[0] : '')
+                  }
                 }
               }
             } catch {}
@@ -243,82 +256,136 @@ export default function BookingDetailPage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Khám bệnh</CardTitle>
-          {existingCheckHealth && (
+          <CardTitle>{isVaccination ? 'Lịch sử tiêm phòng' : 'Khám bệnh'}</CardTitle>
+          {isVaccination && vaccineRecords.length > 0 && (
+            <div className="text-sm text-green-600 mt-2">✓ Có {vaccineRecords.length} bản ghi tiêm phòng</div>
+          )}
+          {!isVaccination && existingCheckHealth && (
             <div className="text-sm text-green-600 mt-2">✓ Đã lưu bệnh án</div>
           )}
         </CardHeader>
         <CardContent>
-          {existingCheckHealth ? (
-            // View mode - display existing check health
+          {isVaccination ? (
+            // Vaccination records display
             <div className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Triệu chứng</p>
-                <p className="font-medium">{existingCheckHealth.symptoms || '—'}</p>
-              </div>
-              
-              <div>
-                <p className="text-sm text-muted-foreground">Chẩn đoán</p>
-                <p className="font-medium">{existingCheckHealth.diagnosis || '—'}</p>
-              </div>
-
-              {existingCheckHealth.followUpDate && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Ngày tái khám</p>
-                  <p className="font-medium">{new Date(existingCheckHealth.followUpDate).toLocaleDateString('vi-VN')}</p>
+              {vaccineRecords.length > 0 ? (
+                vaccineRecords.map((record: any, idx: number) => (
+                  <div key={idx} className="border rounded-lg p-4 bg-blue-50 dark:bg-blue-950/20">
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Vaccine</p>
+                        <p className="font-semibold text-lg">{record.vaccine?.type || 'N/A'}</p>
+                        {record.vaccine?.description && (
+                          <p className="text-xs text-muted-foreground mt-1">{record.vaccine.description}</p>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Liều lượng</p>
+                          <p className="font-medium">{record.dose} ml</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Ngày tiêm</p>
+                          <p className="font-medium">{new Date(record.dateAdministered).toLocaleDateString('vi-VN')}</p>
+                        </div>
+                      </div>
+                      
+                      {record.nextDueDate && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Ngày tiêm lần kế tiếp</p>
+                          <p className="font-medium">{new Date(record.nextDueDate).toLocaleDateString('vi-VN')}</p>
+                        </div>
+                      )}
+                      
+                      {record.doctor?.fullName && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Bác sĩ</p>
+                          <p className="font-medium">{record.doctor.fullName}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-muted-foreground text-center py-6">
+                  Chưa có lịch sử tiêm phòng
                 </div>
               )}
-
-              <div>
-                <p className="text-sm text-muted-foreground">Đơn thuốc</p>
-                <p className="font-medium whitespace-pre-wrap">{existingCheckHealth.prescription || '—'}</p>
-              </div>
-
-              <div className="pt-4 border-t">
-                <p className="text-sm text-muted-foreground mb-2">Ngày khám</p>
-                <p className="font-medium">{new Date(existingCheckHealth.checkDate).toLocaleString('vi-VN')}</p>
-              </div>
             </div>
           ) : (
-            // Edit mode - show form
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="symptoms">Triệu chứng *</Label>
-                <Textarea 
-                  id="symptoms"
-                  placeholder="Mô tả các triệu chứng quan sát được..."
-                  value={symptoms} 
-                  onChange={(e) => setSymptoms(e.target.value)}
-                  rows={3}
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="diagnosis">Chẩn đoán *</Label>
-                <Textarea 
-                  id="diagnosis"
-                  placeholder="Chẩn đoán bệnh..."
-                  value={diagnosis} 
-                  onChange={(e) => setDiagnosis(e.target.value)}
-                  rows={3}
-                />
-              </div>
+            // Check health display
+            existingCheckHealth ? (
+              // View mode - display existing check health
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Triệu chứng</p>
+                  <p className="font-medium">{existingCheckHealth.symptoms || '—'}</p>
+                </div>
+                
+                <div>
+                  <p className="text-sm text-muted-foreground">Chẩn đoán</p>
+                  <p className="font-medium">{existingCheckHealth.diagnosis || '—'}</p>
+                </div>
 
-              <div>
-                <Label htmlFor="followup">Ngày tái khám (tùy chọn)</Label>
-                <Input 
-                  id="followup"
-                  type="date"
-                  value={followUpDate}
-                  onChange={(e) => setFollowUpDate(e.target.value)}
-                />
+                {existingCheckHealth.followUpDate && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Ngày tái khám</p>
+                    <p className="font-medium">{new Date(existingCheckHealth.followUpDate).toLocaleDateString('vi-VN')}</p>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Đơn thuốc</p>
+                  <p className="font-medium whitespace-pre-wrap">{existingCheckHealth.prescription || '—'}</p>
+                </div>
+
+                <div className="pt-4 border-t">
+                  <p className="text-sm text-muted-foreground mb-2">Ngày khám</p>
+                  <p className="font-medium">{new Date(existingCheckHealth.checkDate).toLocaleString('vi-VN')}</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              // Edit mode - show form
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="symptoms">Triệu chứng *</Label>
+                  <Textarea 
+                    id="symptoms"
+                    placeholder="Mô tả các triệu chứng quan sát được..."
+                    value={symptoms} 
+                    onChange={(e) => setSymptoms(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="diagnosis">Chẩn đoán *</Label>
+                  <Textarea 
+                    id="diagnosis"
+                    placeholder="Chẩn đoán bệnh..."
+                    value={diagnosis} 
+                    onChange={(e) => setDiagnosis(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="followup">Ngày tái khám (tùy chọn)</Label>
+                  <Input 
+                    id="followup"
+                    type="date"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                  />
+                </div>
+              </div>
+            )
           )}
         </CardContent>
       </Card>
 
-      {!existingCheckHealth && (
+      {!isVaccination && !existingCheckHealth && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -416,13 +483,18 @@ export default function BookingDetailPage() {
       )}
 
       <div className="flex gap-2">
-        {!existingCheckHealth && (
+        {!isVaccination && !existingCheckHealth && (
           <Button onClick={saveCheckHealth} size="lg">
             Lưu bệnh án
           </Button>
         )}
+        {isVaccination && (
+          <Button onClick={() => router.push(`/vet/vaccination?bookingId=${id}`)} size="lg" className="bg-blue-600">
+            Thêm tiêm phòng
+          </Button>
+        )}
         <Button variant="outline" size="lg" onClick={() => router.back()}>
-          {existingCheckHealth ? 'Đóng' : 'Hủy'}
+          {(isVaccination || existingCheckHealth) ? 'Đóng' : 'Hủy'}
         </Button>
       </div>
     </div>

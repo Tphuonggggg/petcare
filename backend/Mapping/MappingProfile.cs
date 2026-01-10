@@ -64,7 +64,9 @@ public class MappingProfile : Profile
             CreateMap<VaccineBatch, VaccineBatchDto>();
             CreateMap<VaccineBatchDto, VaccineBatch>();
 
-            CreateMap<VaccineRecord, VaccineRecordDto>();
+            CreateMap<VaccineRecord, VaccineRecordDto>()
+                .ForMember(d => d.Vaccine, opt => opt.MapFrom(s => s.Vaccine))
+                .ForMember(d => d.Doctor, opt => opt.MapFrom(s => s.Doctor));
             CreateMap<VaccineRecordDto, VaccineRecord>();
 
             CreateMap<VaccinePackageItem, VaccinePackageItemDto>();

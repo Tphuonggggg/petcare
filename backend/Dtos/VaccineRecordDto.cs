@@ -39,4 +39,10 @@ public class VaccineRecordDto
 
     /// <summary>Next due date (optional).</summary>
     public DateOnly? NextDueDate { get; set; }
+
+    /// <summary>Vaccine details (nested object).</summary>
+    public VaccineDto? Vaccine { get; set; }
+
+    /// <summary>Doctor details (nested object).</summary>
+    public EmployeeDto? Doctor { get; set; }
 }

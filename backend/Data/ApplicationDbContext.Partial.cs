@@ -47,6 +47,13 @@ public partial class ApplicationDbContext
             // Mark table as having triggers to disable OUTPUT clause
             entity.ToTable("Invoice", tb => tb.HasTrigger("trg_InvoiceItem_UpdateInvoiceTotal"));
         });
+
+        // Configure VaccineRecord table to work with database triggers
+        modelBuilder.Entity<VaccineRecord>(entity =>
+        {
+            // Mark table as having triggers to disable OUTPUT clause
+            entity.ToTable("VaccineRecord", tb => tb.HasTrigger("trg_VaccineRecord_Insert_FEFO"));
+        });
         
         // Configure InvoiceItem table triggers  
         modelBuilder.Entity<InvoiceItem>(entity =>

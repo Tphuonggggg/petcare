@@ -2389,9 +2389,10 @@ BEGIN
 END
 GO
 
+-------------------------------------------------------------------
 CREATE OR ALTER TRIGGER trg_VaccineRecord_Insert_FEFO
 ON VaccineRecord
-INSTEAD OF INSERT
+AFTER INSERT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -2400,7 +2401,7 @@ BEGIN
     IF EXISTS (
         SELECT 1
         FROM (
-            SELECT VaccineID, BranchID, SUM(Dose) AS Need
+            SELECT VaccineID, BranchID, SUM(CAST(Dose AS DECIMAL(10,2))) AS Need
             FROM inserted
             GROUP BY VaccineID, BranchID
         ) d
@@ -2415,6 +2416,7 @@ BEGIN
     )
     BEGIN
         RAISERROR(N'Không đủ tồn kho vắc-xin',16,1);
+        ROLLBACK;
         RETURN;
     END
 
@@ -2430,25 +2432,17 @@ BEGIN
               AND vb.Quantity > 0
             ORDER BY vb.ExpiryDate
         ) b
-        WHERE b.ExpiryDate < i.DateAdministered
+        WHERE b.ExpiryDate < CAST(i.DateAdministered AS DATE)
     )
     BEGIN
         RAISERROR(N'Không thể tiêm vắc-xin đã hết hạn',16,1);
+        ROLLBACK;
         RETURN;
     END
 
-    /* 3. Insert lịch sử tiêm */
-    INSERT INTO VaccineRecord
-    (PetID, VaccineID, BranchID, DoctorID, InvoiceItemID,
-     Dose, DateAdministered, NextDueDate)
-    SELECT
-        PetID, VaccineID, BranchID, DoctorID, InvoiceItemID,
-        Dose, DateAdministered, NextDueDate
-    FROM inserted;
-
-    /* 4. Trừ kho theo FEFO */
+    /* 3. Trừ kho theo FEFO */
     ;WITH UsedDose AS (
-        SELECT VaccineID, BranchID, SUM(Dose) AS TotalDose
+        SELECT VaccineID, BranchID, SUM(CAST(Dose AS DECIMAL(10,2))) AS TotalDose
         FROM inserted
         GROUP BY VaccineID, BranchID
     ),
@@ -2472,7 +2466,7 @@ BEGIN
         CASE
             WHEN f.CumQty <= u.TotalDose THEN 0
             WHEN f.CumQty - vb.Quantity >= u.TotalDose THEN vb.Quantity
-            ELSE f.CumQty - u.TotalDose
+            ELSE CAST(f.CumQty - u.TotalDose AS INT)
         END
     FROM VaccineBatch vb
     JOIN FEFO f ON vb.BatchID = f.BatchID
@@ -2481,8 +2475,6 @@ BEGIN
      AND f.BranchID  = u.BranchID;
 END
 GO
-
-
 ----------Trigger: trg_Invoice_UpdateLoyalty-------------------
 -- Chức năng: Cộng điểm loyalty khi thanh toán hóa đơn
 -- Quy tắc: 1 điểm = 50.000 VNĐ

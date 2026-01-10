@@ -37,6 +37,9 @@ public class BookingsController : ControllerBase
         var dto = new BookingDetailDto
         {
             BookingId = booking.BookingId,
+            BranchId = booking.BranchId,
+            PetId = booking.PetId,
+            DoctorId = booking.DoctorId,
             BookingTime = booking.RequestedDateTime,
             CustomerName = booking.Customer?.FullName ?? "N/A",
             CustomerPhone = booking.Customer?.Phone ?? "N/A",
@@ -283,6 +286,34 @@ public class BookingsController : ControllerBase
                 WHERE BookingId = {id}
             ");
             return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Updates booking status.
+    /// </summary>
+    [HttpPost("{id}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest request)
+    {
+        try
+        {
+            var booking = await _context.Bookings.FindAsync(id);
+            if (booking == null) return NotFound();
+
+            if (string.IsNullOrEmpty(request?.Status))
+            {
+                return BadRequest("Status is required");
+            }
+
+            booking.Status = request.Status;
+            _context.Bookings.Update(booking);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Status updated successfully" });
         }
         catch (Exception ex)
         {

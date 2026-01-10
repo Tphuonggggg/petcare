@@ -29,19 +29,28 @@ public class VaccineRecordsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns paginated vaccine records, optionally filtered by branch.
+    /// Returns paginated vaccine records, optionally filtered by branch or pet.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<PaginatedResult<VaccineRecordDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] int? branchId = null)
+    public async Task<ActionResult<PaginatedResult<VaccineRecordDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] int? branchId = null, [FromQuery] int? petId = null)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 20;
-        var q = _context.VaccineRecords.AsQueryable();
+        var q = _context.VaccineRecords
+            .Include(v => v.Vaccine)
+            .Include(v => v.Doctor)
+            .AsQueryable();
         
         // Filter by branch if provided
         if (branchId.HasValue)
         {
             q = q.Where(v => v.BranchId == branchId.Value);
+        }
+        
+        // Filter by pet if provided
+        if (petId.HasValue)
+        {
+            q = q.Where(v => v.PetId == petId.Value);
         }
         
         var total = await q.CountAsync();
@@ -56,7 +65,10 @@ public class VaccineRecordsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<VaccineRecordDto>> Get(int id)
     {
-        var e = await _context.VaccineRecords.FindAsync(id);
+        var e = await _context.VaccineRecords
+            .Include(v => v.Vaccine)
+            .Include(v => v.Doctor)
+            .FirstOrDefaultAsync(v => v.VaccinationRecordId == id);
         if (e == null) return NotFound();
         return _mapper.Map<VaccineRecordDto>(e);
     }

@@ -230,7 +230,8 @@ export default function BranchReportsPage() {
           stats.totalRevenue += price
         })
 
-        setDoctorStats(Array.from(doctorMap.values()).sort((a, b) => b.totalRevenue - a.totalRevenue))
+        const allDoctorsData = Array.from(doctorMap.values()).sort((a, b) => b.totalRevenue - a.totalRevenue)
+        setDoctorStats(allDoctorsData)
       }
     } catch (e) {
       console.error('Error loading statistics:', e)
@@ -366,7 +367,7 @@ export default function BranchReportsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b">
-                <th className="text-left py-3 px-4">Bác sĩ</th>
+                <th className="text-left py-3 px-4">Tên bác sĩ</th>
                 <th className="text-right py-3 px-4">Số lượt khám</th>
                 <th className="text-right py-3 px-4">Doanh thu</th>
               </tr>
@@ -377,7 +378,7 @@ export default function BranchReportsPage() {
                   .slice((doctorCurrentPage - 1) * doctorPageSize, doctorCurrentPage * doctorPageSize)
                   .map((doctor) => (
                     <tr key={doctor.employeeId} className="border-b hover:bg-muted/50">
-                      <td className="py-3 px-4">{doctor.employeeName}</td>
+                      <td className="py-3 px-4 font-medium">{doctor.employeeName}</td>
                       <td className="text-right py-3 px-4">
                         <Badge variant="outline">{doctor.checkupCount}</Badge>
                       </td>

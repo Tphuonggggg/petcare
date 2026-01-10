@@ -8,6 +8,9 @@ namespace PetCareX.Api.Dtos;
 public class BookingDetailDto
 {
     public int BookingId { get; set; }
+    public int? BranchId { get; set; }
+    public int? PetId { get; set; }
+    public int? DoctorId { get; set; }
     public DateTime BookingTime { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
